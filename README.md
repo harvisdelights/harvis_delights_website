@@ -12,6 +12,8 @@ Database-driven storefront for Harvi's Delights. It includes a public product ca
 
 Open `/admin/` to add categories, products, primary photos, extra gallery photos, descriptions, prices, weights, Flipkart/Meesho marketplace links, and featured status. The API is available at `/api/products/` and `/api/categories/`.
 
-## Railway deployment
+## Render deployment
 
-This project is configured to run as one Railway service with SQLite. Add a Railway Volume mounted at `/data`, then set `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=False`, `DJANGO_ALLOWED_HOSTS`, and `DJANGO_CSRF_TRUSTED_ORIGINS` (use comma-separated `https://` origins for your Railway and custom domains). Railway reads `railway.toml`, migrates the database on startup, and serves the site with Gunicorn. Keep one replica because SQLite is a single-file database. Back up the `/data` volume regularly.
+The included `render.yaml` creates a Django web service and managed PostgreSQL database. Render wires `DATABASE_URL` privately, runs migrations before each deploy, and stores product uploads on a 1 GB persistent disk mounted at `/var/data`.
+
+After applying the Blueprint, add your custom domain in the Render Dashboard and update `DJANGO_ALLOWED_HOSTS` plus `DJANGO_CSRF_TRUSTED_ORIGINS` with that domain. The generated `DJANGO_SECRET_KEY` is managed by Render. Keep one web instance while uploads use the local persistent disk; move media to object storage before horizontal scaling.

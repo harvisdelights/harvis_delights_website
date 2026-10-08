@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import dj_database_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 def env_bool(name, default=False):
@@ -31,10 +32,15 @@ ROOT_URLCONF = "config.urls"
 TEMPLATES = [{"BACKEND": "django.template.backends.django.DjangoTemplates", "DIRS": [], "APP_DIRS": True,
               "OPTIONS": {"context_processors": ["django.template.context_processors.request", "django.contrib.auth.context_processors.auth", "django.contrib.messages.context_processors.messages"]}}]
 WSGI_APPLICATION = "config.wsgi.application"
-# Railway mounts its persistent volume at /data. Locally, the repository remains self-contained.
+# Local development uses SQLite. Render supplies DATABASE_URL for managed PostgreSQL.
+# DATA_DIR is used only for user-uploaded media in production.
 DATA_DIR = Path(os.environ.get("DATA_DIR", BASE_DIR))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
-DATABASES = {"default": {"ENGINE": "django.db.backends.sqlite3", "NAME": DATA_DIR / "db.sqlite3"}}
+DATABASE_URL = os.environ.get("DATABASE_URL")
+DATABASES = {
+    "default": dj_database_url.config(conn_max_age=600, conn_health_checks=True)
+    if DATABASE_URL else {"ENGINE": "django.db.backends.sqlite3", "NAME": DATA_DIR / "db.sqlite3"}
+}
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "Asia/Kolkata"
 USE_I18N = True
