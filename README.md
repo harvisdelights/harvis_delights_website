@@ -10,4 +10,4 @@ Database-driven storefront for Harvi's Delights. It includes a public product ca
 4. Create the seller account: `python manage.py createsuperuser`
 5. Start the site: `python manage.py runserver`
 
-Open `/admin/` to add categories, products, primary photos, extra gallery photos, descriptions, prices, weights, and featured status. The API is available at `/api/products/` and `/api/categories/`.
+Open `/admin/` to add categories, products, primary photos, extra gallery photos, descriptions, prices, weights, Flipkart/Meesho marketplace links, and featured status. The API is available at `/api/products/` and `/api/categories/`.

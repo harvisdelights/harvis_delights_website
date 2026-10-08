@@ -10,4 +10,4 @@ class ProductSerializer(serializers.ModelSerializer):
     gallery = ProductImageSerializer(many=True, read_only=True)
     class Meta:
         model = Product
-        fields = ("id", "name", "slug", "short_description", "description", "price", "weight", "image", "is_featured", "category", "gallery")
+        fields = ("id", "name", "slug", "short_description", "description", "price", "weight", "image", "flipkart_url", "meesho_url", "is_featured", "category", "gallery")

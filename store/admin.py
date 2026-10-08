@@ -10,6 +10,12 @@ class ProductAdmin(admin.ModelAdmin):
     list_display = ("name", "category", "price", "weight", "is_featured", "is_active", "updated_at")
     list_filter = ("category", "is_active", "is_featured")
     list_editable = ("is_featured", "is_active")
+    fieldsets = (
+        ("Product details", {"fields": ("category", "name", "slug", "short_description", "description", "price", "weight")}),
+        ("Photos", {"fields": ("image",)}),
+        ("Marketplace links", {"fields": ("flipkart_url", "meesho_url")}),
+        ("Visibility", {"fields": ("is_featured", "is_active")}),
+    )
     prepopulated_fields = {"slug": ("name",)}
     search_fields = ("name", "description")
     inlines = [ProductImageInline]
