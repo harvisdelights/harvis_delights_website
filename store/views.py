@@ -1,7 +1,11 @@
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
 from rest_framework import viewsets
 from .models import Category, Product
 from .serializers import CategorySerializer, ProductSerializer
+
+def health(request):
+    return HttpResponse("ok")
 
 def home(request):
     return render(request, "store/home.html", {"featured": Product.objects.filter(is_active=True, is_featured=True)[:6]})
