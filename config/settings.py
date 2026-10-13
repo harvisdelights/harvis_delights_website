@@ -37,7 +37,8 @@ WSGI_APPLICATION = "config.wsgi.application"
 DATA_DIR = Path(os.environ.get("DATA_DIR", BASE_DIR))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DATABASE_URL = os.environ.get("DATABASE_URL")
-if not DATABASE_URL and not DEBUG:
+ALLOW_EPHEMERAL_SQLITE = env_bool("DJANGO_ALLOW_EPHEMERAL_SQLITE", False)
+if not DATABASE_URL and not DEBUG and not ALLOW_EPHEMERAL_SQLITE:
     raise RuntimeError("DATABASE_URL is required when DJANGO_DEBUG=False. Configure a Render PostgreSQL database before deploying.")
 DATABASES = {
     "default": dj_database_url.config(conn_max_age=600, conn_health_checks=True)
