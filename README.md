@@ -1,6 +1,6 @@
 # Harvi's Delights
 
-Database-driven storefront for Harvi's Delights. It includes a public product catalogue, persistent browser cart (no checkout/order flow), Django seller administration, product gallery uploads, and a read-only REST API.
+Database-driven storefront for Harvi's Delights. It includes a public product catalogue, browser cart, customer accounts, checkout order requests, Django seller administration, product gallery uploads, and a read-only REST API.
 
 ## Run locally
 
@@ -15,6 +15,14 @@ Open `/admin/` to add categories, products, primary photos, extra gallery photos
 ## Customer accounts
 
 Customers can register and sign in with their email address at `/signup/` and `/login/`. Accounts use Django's built-in authentication tables in the configured database (Render PostgreSQL in production). Customers can view their account and change their password; email-based password recovery is intentionally deferred until email delivery is configured.
+
+## Orders and delivery estimates
+
+Customers must sign in before checkout. Their delivery address, order, and immutable product/price snapshots are stored in the configured database. Seller staff can review every order and update its status from `/admin/`. There is deliberately no payment collection or automatic shipment creation yet; each order remains an order request until Harvi's Delights confirms it.
+
+The checkout estimate starts from **Harvi's Delights, Nizampet, 500090**. Add either `SHIPROCKET_API_TOKEN` or both `SHIPROCKET_EMAIL` and `SHIPROCKET_PASSWORD` as secret Render environment variables to enable Shiprocket serviceability and estimated delivery times. Without those credentials, checkout continues to work and displays a standard 4-7 business-day estimate. This integration is read-only: it does not create Shiprocket shipments, charges, or pickup locations.
+
+Before dispatching live Shiprocket orders, create the pickup location in Shiprocket with the seller's complete street address, city/state, contact name, and phone number. Do not commit Shiprocket credentials to Git.
 
 ## Render deployment
 

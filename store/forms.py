@@ -58,3 +58,13 @@ class CustomerLoginForm(forms.Form):
 
     def get_user(self):
         return self.user_cache
+
+
+class CheckoutAddressForm(forms.Form):
+    full_name = forms.CharField(max_length=120, label="Full name")
+    phone = forms.RegexField(regex=r"^[6-9][0-9]{9}$", label="Mobile number", error_messages={"invalid": "Enter a valid 10-digit Indian mobile number."})
+    line1 = forms.CharField(max_length=180, label="Address line 1")
+    line2 = forms.CharField(max_length=180, label="Address line 2", required=False)
+    city = forms.CharField(max_length=80)
+    state = forms.CharField(max_length=80)
+    pincode = forms.RegexField(regex=r"^[1-9][0-9]{5}$", label="Pincode", error_messages={"invalid": "Enter a valid 6-digit pincode."})
