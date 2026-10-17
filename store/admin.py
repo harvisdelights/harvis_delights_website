@@ -35,7 +35,7 @@ class OrderAdmin(admin.ModelAdmin):
     list_display = ("number", "user", "status", "total", "delivery_estimate", "created_at")
     list_filter = ("status", "payment_method")
     search_fields = ("number", "user__email", "user__first_name")
-    readonly_fields = ("number", "user", "address", "subtotal", "shipping_charge", "total", "delivery_estimate", "shiprocket_courier", "created_at", "updated_at")
+    readonly_fields = ("number", "checkout_id", "user", "address", "subtotal", "shipping_charge", "total", "delivery_estimate", "shiprocket_courier", "created_at", "updated_at")
     inlines = [OrderItemInline]
 
 @admin.register(CustomerAddress)

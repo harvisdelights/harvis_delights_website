@@ -66,6 +66,7 @@ class Order(models.Model):
         CANCELLED = "cancelled", "Cancelled"
 
     number = models.CharField(max_length=28, unique=True, editable=False)
+    checkout_id = models.UUIDField(null=True, unique=True, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="orders", on_delete=models.PROTECT)
     address = models.ForeignKey(CustomerAddress, related_name="orders", null=True, on_delete=models.SET_NULL)
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)

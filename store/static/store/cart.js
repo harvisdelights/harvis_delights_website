@@ -1,7 +1,7 @@
 (() => {
   const key = "harvis-cart";
   const read = () => JSON.parse(localStorage.getItem(key) || "[]");
-  const save = cart => localStorage.setItem(key, JSON.stringify(cart));
+  const save = cart => { localStorage.setItem(key, JSON.stringify(cart)); window.dispatchEvent(new Event("harvis-cart-changed")); };
   const money = value => `₹${Number(value).toFixed(2)}`;
   const render = () => {
     const cart = read(), target = document.querySelector("[data-cart-items]");
@@ -18,7 +18,7 @@
   document.querySelectorAll("[data-cart-close]").forEach(x => x.onclick = close);
   document.querySelectorAll("[data-add]").forEach(button => button.onclick = () => {
     const cart = read(), item = cart.find(p => p.id === button.dataset.id);
-    if (item) item.quantity += 1;
+    if (item) item.quantity = Math.min(20, item.quantity + 1);
     else cart.push({id: button.dataset.id, name: button.dataset.name, price: Number(button.dataset.price), image: button.dataset.image || "", quantity: 1});
     save(cart); render(); open();
   });

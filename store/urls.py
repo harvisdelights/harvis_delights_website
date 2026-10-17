@@ -13,6 +13,7 @@ urlpatterns = [
     path("password-recovery/", views.password_recovery, name="password_recovery"),
     path("password-change/", views.CustomerPasswordChangeView.as_view(), name="password_change"),
     path("checkout/", views.checkout, name="checkout"),
+    path("cart-review/", views.cart_review, name="cart_review"),
     path("shipping-estimate/", views.shipping_estimate, name="shipping_estimate"),
     path("orders/<str:number>/", views.order_confirmation, name="order_confirmation"),
     path("products/", views.products, name="products"),
