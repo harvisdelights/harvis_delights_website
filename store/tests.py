@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from .models import Category, CustomerAddress, Order, Product
+from .models import Category, CustomerAddress, Order, OrderEmail, Product
 
 
 @override_settings(STORAGES={"default": {"BACKEND": "django.core.files.storage.FileSystemStorage"}, "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"}})
@@ -101,3 +101,18 @@ class CheckoutTests(TestCase):
         response = self.client.post(reverse("checkout"), self.order_data(""))
         self.assertContains(response, "review is missing or expired")
         self.assertFalse(Order.objects.exists())
+
+    @override_settings(ZEPTOMAIL_API_URL="https://api.zeptomail.com/v1.1/email", ZEPTOMAIL_API_KEY="key", EMAIL_BACKEND="store.services.zeptomail.ZeptoMailBackend")
+    @patch("store.services.zeptomail.requests.post", side_effect=ConnectionError("offline"))
+    @patch("store.views.delivery_estimate", return_value={"message": "To be confirmed", "courier": ""})
+    def test_order_is_saved_once_even_when_email_fails(self, _estimate, _post):
+        self.user.email = "buyer@example.com"
+        self.user.save()
+        data = self.order_data(self.review().json()["quote"])
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.client.post(reverse("checkout"), data)
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(Order.objects.count(), 1)
+        self.assertEqual(OrderEmail.objects.filter(status="failed").count(), 2)
+        self.client.post(reverse("checkout"), data)
+        self.assertEqual(OrderEmail.objects.count(), 2)

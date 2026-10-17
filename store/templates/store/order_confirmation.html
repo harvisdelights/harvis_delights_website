@@ -7,7 +7,44 @@
   <p>Your reference is <strong>{{ order.number }}</strong>. Harvi's Delights will confirm your order and delivery details before dispatch.</p>
   <div class="confirmation-detail"><span>Estimated delivery</span><b>{{ order.delivery_estimate|default:"To be confirmed" }}</b>{% if order.shiprocket_courier %}<small>Courier option: {{ order.shiprocket_courier }}</small>{% endif %}</div>
   <h2>Items</h2>{% for item in order.items.all %}<div class="confirmation-item"><span>{{ item.product_name }} &times; {{ item.quantity }}</span><b>&#8377;{{ item.unit_price }} each</b></div>{% endfor %}
-  <div class="summary-total"><span>Total</span><strong>&#8377;{{ order.total }}</strong></div>
+  <div class="summary-total"><span>Total (free delivery)</span><strong>&#8377;{{ order.total }}</strong></div>
+  {% if order.payment.status == 'paid' %}<p><strong>Test payment captured.</strong> Order confirmation is handled separately by the seller.</p>
+  {% elif payment_enabled and order.status != 'cancelled' %}
+  <p>Online payment is in test mode: no real money will be charged. Cash on delivery is not available yet.</p>
+  <button type="button" class="button" id="pay-button">Pay in test mode</button>
+  <p id="payment-message" role="status"></p>
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <script>
+  (() => {
+    const button = document.getElementById('pay-button');
+    const message = document.getElementById('payment-message');
+    const token = '{{ csrf_token }}';
+    button.addEventListener('click', async () => {
+      button.disabled = true;
+      try {
+        const result = await fetch('{% url "payment_start" order.number %}', {method:'POST', headers:{'X-CSRFToken':token}});
+        const data = await result.json();
+        if (data.paid) { location.reload(); return; }
+        if (!result.ok) throw new Error(data.detail || 'Unable to start payment.');
+        if (typeof Razorpay === 'undefined') throw new Error('Payment window could not load. Please try again.');
+        new Razorpay({key:data.key, order_id:data.order_id, amount:data.amount, currency:data.currency, name:data.name,
+          description:'Test payment for ' + data.reference,
+          handler: async function(response) {
+            const body = new URLSearchParams(response);
+            try {
+              const verify = await fetch('{% url "payment_verify" order.number %}', {method:'POST', headers:{'X-CSRFToken':token}, body});
+              const status = await verify.json();
+              if (status.paid) { location.reload(); return; }
+              message.textContent = status.detail || 'Payment confirmation is pending. Please check your order later.';
+            } catch (_) { message.textContent = 'Payment confirmation is pending. Please check your order later.'; }
+            button.disabled = false;
+          }, modal:{ondismiss:function(){ button.disabled = false; message.textContent = 'Payment window closed. You can retry.'; }}
+        }).open();
+      } catch (error) { message.textContent = error.message || 'Unable to start payment.'; button.disabled = false; }
+    });
+  })();
+  </script>
+  {% else %}<p>No online payment has been collected. Cash on delivery is not available yet.</p>{% endif %}
   <a class="button" href="{% url 'products' %}">Continue shopping</a>
 </section></main>
 {% if order.checkout_id %}<script>

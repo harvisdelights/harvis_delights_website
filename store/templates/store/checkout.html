@@ -16,6 +16,7 @@
       {% for field in form %}<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.errors %}<small class="field-error">{{ field.errors|striptags }}</small>{% endif %}</div>{% endfor %}
       <button class="button" type="button" id="estimate-button">Check delivery estimate</button>
       <div class="estimate" id="estimate-result" aria-live="polite">Enter your pincode to check delivery availability.</div>
+      <div class="estimate"><strong>Payment options</strong><p><button type="button" onclick="document.getElementById('cod-message').hidden = false">Cash on delivery</button></p><p id="cod-message" hidden>Cash on delivery is not available yet.</p>{% if payment_enabled %}<p>Online payment is available in test mode after placing your order request. No real money is charged.</p>{% else %}<p>Online payment is not available yet. Your order will be confirmed by the seller.</p>{% endif %}</div>
       <button class="button checkout-submit" type="submit" id="checkout-submit" disabled>Place order request</button>
       <noscript>JavaScript is required to review your cart and place an order.</noscript>
     </form>
@@ -25,7 +26,7 @@
     <div id="checkout-items" aria-live="polite">Loading current product prices...</div>
     <div class="summary-total"><span>Items subtotal</span><strong id="checkout-total">&#8377;0.00</strong></div>
     <p id="cart-review-message" role="status">Checking your cart...</p>
-    <p>Prices are checked again when you place the order. Shipping charges, if any, are confirmed before dispatch. No payment is collected online yet.</p>
+    <p>Prices are checked again when you place the order. Delivery is free.</p>
   </aside>
 </main>
 <script>window.checkoutConfig = {reviewUrl: "{% url 'cart_review' %}", estimateUrl: "{% url 'shipping_estimate' %}"};</script>

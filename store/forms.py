@@ -1,5 +1,8 @@
 from django import forms
 from django.contrib.auth import authenticate, get_user_model
+from django.contrib.auth.forms import PasswordResetForm
+from django.conf import settings
+from urllib.parse import urlsplit
 
 
 class CustomerSignupForm(forms.Form):
@@ -68,3 +71,11 @@ class CheckoutAddressForm(forms.Form):
     city = forms.CharField(max_length=80)
     state = forms.CharField(max_length=80)
     pincode = forms.RegexField(regex=r"^[1-9][0-9]{5}$", label="Pincode", error_messages={"invalid": "Enter a valid 6-digit pincode."})
+
+
+class CustomerPasswordResetForm(PasswordResetForm):
+    def save(self, **kwargs):
+        site = urlsplit(settings.PUBLIC_SITE_URL)
+        kwargs["domain_override"] = site.netloc
+        kwargs["use_https"] = site.scheme == "https"
+        return super().save(**kwargs)

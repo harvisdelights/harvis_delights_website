@@ -100,3 +100,42 @@ class OrderItem(models.Model):
 
     def __str__(self):
         return f"{self.product_name} × {self.quantity}"
+
+
+class Payment(models.Model):
+    class Status(models.TextChoices):
+        CREATING = "creating", "Creating gateway order"
+        PENDING = "pending", "Awaiting payment"
+        PAID = "paid", "Payment captured"
+        REVIEW = "review", "Needs manual review"
+
+    order = models.OneToOneField(Order, related_name="payment", on_delete=models.PROTECT)
+    gateway_order_id = models.CharField(max_length=100, unique=True, null=True, blank=True)
+    gateway_payment_id = models.CharField(max_length=100, unique=True, null=True, blank=True)
+    status = models.CharField(max_length=12, choices=Status.choices, default=Status.CREATING)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class OrderEmail(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        SENDING = "sending", "Sending"
+        SENT = "sent", "Accepted by provider"
+        FAILED = "failed", "Failed"
+
+    order = models.ForeignKey(Order, related_name="email_notifications", on_delete=models.CASCADE)
+    recipient = models.EmailField()
+    subject = models.CharField(max_length=200)
+    body = models.TextField()
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    attempts = models.PositiveIntegerField(default=0)
+    last_error = models.CharField(max_length=200, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.order.number}: {self.subject}"

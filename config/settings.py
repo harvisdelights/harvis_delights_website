@@ -65,3 +65,21 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "account"
 LOGOUT_REDIRECT_URL = "home"
+
+# ZeptoMail uses HTTPS, including on Render Free. Leave unset to disable sending.
+ZEPTOMAIL_API_URL = os.environ.get("ZEPTOMAIL_API_URL", "").strip()
+ZEPTOMAIL_API_KEY = os.environ.get("ZEPTOMAIL_API_KEY", "").strip()
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "hdcare@harvisdelights.com")
+SELLER_NOTIFICATION_EMAIL = os.environ.get("SELLER_NOTIFICATION_EMAIL", "hdcare@harvisdelights.com")
+PUBLIC_SITE_URL = os.environ.get("PUBLIC_SITE_URL", "").rstrip("/")
+EMAIL_BACKEND = "store.services.zeptomail.ZeptoMailBackend"
+PASSWORD_RESET_TIMEOUT = 3600
+RAZORPAY_KEY_ID = os.environ.get("RAZORPAY_KEY_ID", "").strip()
+RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "").strip()
+RAZORPAY_WEBHOOK_SECRET = os.environ.get("RAZORPAY_WEBHOOK_SECRET", "").strip()
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
+    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+]
