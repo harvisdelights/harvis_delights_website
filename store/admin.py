@@ -34,11 +34,18 @@ class OrderItemInline(admin.TabularInline):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ("number", "user", "status", "total", "delivery_estimate", "created_at")
+    list_display = ("number", "user", "status", "payment_status", "total", "delivery_estimate", "created_at")
     list_filter = ("status", "payment_method")
     search_fields = ("number", "user__email", "user__first_name")
     readonly_fields = ("number", "checkout_id", "user", "address", "subtotal", "shipping_charge", "total", "delivery_estimate", "shiprocket_courier", "created_at", "updated_at")
     inlines = [OrderItemInline]
+
+    @admin.display(description="Online payment")
+    def payment_status(self, obj):
+        try:
+            return obj.payment.get_status_display()
+        except Payment.DoesNotExist:
+            return "Not paid online"
 
     def save_model(self, request, obj, form, change):
         status_changed = change and "status" in form.changed_data

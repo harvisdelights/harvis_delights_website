@@ -4,9 +4,9 @@
 {% block content %}
 <main class="checkout-page">
   <section>
-    <p class="eyebrow">ORDER REQUEST</p>
+    <p class="eyebrow">CHECKOUT</p>
     <h1>Delivery details</h1>
-    <p class="checkout-intro">Orders are confirmed by Harvi's Delights before dispatch. Delivery estimates begin from {{ seller_origin }}.</p>
+    <p class="checkout-intro">Orders are confirmed automatically. Payment is tracked separately. Delivery estimates begin from {{ seller_origin }}.</p>
     <form method="post" id="checkout-form" class="checkout-form">
       {% csrf_token %}
       <input type="hidden" name="cart_payload" id="cart-payload">
@@ -16,8 +16,8 @@
       {% for field in form %}<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.errors %}<small class="field-error">{{ field.errors|striptags }}</small>{% endif %}</div>{% endfor %}
       <button class="button" type="button" id="estimate-button">Check delivery estimate</button>
       <div class="estimate" id="estimate-result" aria-live="polite">Enter your pincode to check delivery availability.</div>
-      <div class="estimate"><strong>Payment options</strong><p><button type="button" onclick="document.getElementById('cod-message').hidden = false">Cash on delivery</button></p><p id="cod-message" hidden>Cash on delivery is not available yet.</p>{% if payment_enabled %}<p>Online payment is available in test mode after placing your order request. No real money is charged.</p>{% else %}<p>Online payment is not available yet. Your order will be confirmed by the seller.</p>{% endif %}</div>
-      <button class="button checkout-submit" type="submit" id="checkout-submit" disabled>Place order request</button>
+      <div class="estimate"><strong>Payment options</strong><p><button type="button" onclick="document.getElementById('cod-message').hidden = false">Cash on delivery</button></p><p id="cod-message" hidden>Cash on delivery is not available yet.</p>{% if payment_enabled %}<p>Continue to Razorpay test payment. No real money is charged.</p>{% else %}<p>Online payment is not available yet. No payment will be collected.</p>{% endif %}</div>
+      <button class="button checkout-submit" type="submit" id="checkout-submit" disabled>{% if payment_enabled %}Place order and continue to payment{% else %}Place order{% endif %}</button>
       <noscript>JavaScript is required to review your cart and place an order.</noscript>
     </form>
   </section>

@@ -24,15 +24,15 @@ The Django migration must run before enabling this version. Order notifications 
 
 ## Orders and delivery estimates
 
-Customers must sign in before checkout. Their delivery address, order, and immutable product/price snapshots are stored in the configured database. Seller staff can review every order and update its status from `/admin/`. Orders remain requests until the seller confirms them. There is no automatic shipment creation.
+Customers must sign in before checkout. Their delivery address, order, and immutable product/price snapshots are stored in the configured database. New orders are automatically marked confirmed; this does not mean payment was made or captured. Seller staff can review orders and payment status in `/admin/`. Never dispatch based on order status alone. There is no automatic shipment creation.
 
 ### Razorpay test payments
 
-This integration is **test-only**: live keys are rejected. It does not collect real money and is not ready for live payments, refunds or production fulfilment. Delivery is free; COD is unavailable. An existing order request can be paid in test mode on its confirmation page. Order status and payment status are separate; only a captured payment verified against the order amount and currency is marked paid. Existing order requests continue to work when test payment is not configured.
+This integration is **test-only**: live keys are rejected. It does not collect real money and is not ready for live payments, refunds or production fulfilment. Delivery is free; COD is unavailable. On checkout, Razorpay test checkout opens automatically if configured; a button remains available if automatic opening fails. An existing eligible order can also be paid in test mode on its confirmation page. Order status and payment status are separate; only a captured payment verified against the order amount and currency is marked paid. Orders continue to work when test payment is not configured.
 
 1. Create a Razorpay account, switch to test mode, generate test API keys, and configure automatic capture in the Razorpay dashboard.
 2. Configure a test-mode webhook at `https://YOUR-SITE/payments/razorpay/webhook/` for `payment.captured`, with a separate strong webhook secret. Use the real public HTTPS site origin.
-3. Privately set `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_WEBHOOK_SECRET` in the Render web service. Never commit or share secrets. A test key ID must start with `rzp_test_`.
+3. Privately set `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, and `RAZORPAY_WEBHOOK_SECRET` in the Render web service, or in the ignored local `.env` file for local testing. Environment variables take precedence over `.env`. Never commit or share secrets. A test key ID must start with `rzp_test_`. All three values are required; the webhook secret is the value you choose when configuring the webhook, not the API key secret.
 4. Deploy with migrations, then place an order request and test successful, failed and abandoned payments using Razorpay test data. Check Payments in seller admin and the Razorpay test dashboard. Webhooks may arrive after the customer closes checkout.
 
 If gateway order creation times out, the record is marked for manual review and cannot be retried automatically because the remote order may already exist. Compare the order reference with the Razorpay dashboard and contact support/developers; do not delete payment records to force retries. Test refunds, cancelled orders, reconciliation, webhook secret rotation, concurrent requests and operational recovery require further production hardening before enabling real money.

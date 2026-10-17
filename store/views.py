@@ -204,7 +204,7 @@ def checkout(request):
                                 if missing or quote.get("lines") != _quote_lines(products, quantities):
                                     raise ValueError("Your cart or prices changed. Please review the current items and total before ordering.")
                                 address = CustomerAddress.objects.create(user=request.user, **{key: form.cleaned_data[key] for key in ("full_name", "phone", "line1", "line2", "city", "state", "pincode")})
-                                order = Order.objects.create(checkout_id=checkout_id, user=request.user, address=address, subtotal=subtotal, total=subtotal, delivery_estimate=estimate["message"], shiprocket_courier=estimate["courier"])
+                                order = Order.objects.create(checkout_id=checkout_id, user=request.user, address=address, status=Order.Status.CONFIRMED, subtotal=subtotal, total=subtotal, delivery_estimate=estimate["message"], shiprocket_courier=estimate["courier"])
                                 OrderItem.objects.bulk_create([OrderItem(order=order, product=p, product_name=p.name, unit_price=p.price, quantity=quantities[p.id]) for p in products])
                                 queue_new_order_emails(order)
                         except ValueError as exc:
@@ -233,7 +233,7 @@ def payment_start(request, number):
     order = get_object_or_404(Order, number=number, user=request.user)
     if not payments.configured():
         return JsonResponse({"detail": "Test payments are not configured."}, status=503)
-    if order.status not in (Order.Status.PENDING, Order.Status.CONFIRMED) or order.total <= 0 or order.shipping_charge != 0:
+    if order.status not in (Order.Status.PENDING, Order.Status.CONFIRMED) or order.total < Decimal("1.00") or order.shipping_charge != 0:
         return JsonResponse({"detail": "This order is not eligible for payment."}, status=400)
     try:
         payment, created = Payment.objects.get_or_create(order=order)

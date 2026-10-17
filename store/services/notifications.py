@@ -37,9 +37,9 @@ def queue_order_email(order, recipient, subject, body):
 
 def queue_new_order_emails(order):
     lines = "\n".join(f"- {item.product_name} x {item.quantity}: INR {item.unit_price} each" for item in order.items.all())
-    body = f"Order reference: {order.number}\nStatus: Pending confirmation\n\n{lines}\n\nItems subtotal: INR {order.total}\nDelivery is free. No online payment has been collected when this order request was created.\n\nHarvi's Delights"
-    queue_order_email(order, order.user.email, f"Order request received - {order.number}", f"Thank you for your order request. We will confirm it before dispatch.\n\n{body}")
-    queue_order_email(order, settings.SELLER_NOTIFICATION_EMAIL, f"New order request - {order.number}", f"A customer placed an order request. Please review it in seller admin.\n\n{body}")
+    body = f"Order reference: {order.number}\nOrder status: {order.get_status_display()}\nPayment status: Not paid at time of order creation\n\n{lines}\n\nItems subtotal: INR {order.total}\nDelivery is free. Check the order page for the latest payment status.\n\nHarvi's Delights"
+    queue_order_email(order, order.user.email, f"Order received - {order.number}", f"Thank you. Your order has been received; payment is separate.\n\n{body}")
+    queue_order_email(order, settings.SELLER_NOTIFICATION_EMAIL, f"New order - {order.number}", f"A customer placed an order. Verify payment status before dispatch.\n\n{body}")
 
 
 def queue_order_status_email(order):

@@ -69,5 +69,22 @@ class PaymentTests(TestCase):
         self.client.force_login(other)
         self.assertEqual(self.client.post(self.start).status_code, 404)
 
+    def test_minimum_order_amount(self):
+        self.order.total = Decimal("0.99")
+        self.order.save(update_fields=["total"])
+        self.assertEqual(self.client.post(self.start).status_code, 400)
+        self.assertFalse(Payment.objects.exists())
+
+    def test_missing_verification_fields_rejected(self):
+        Payment.objects.create(order=self.order, gateway_order_id="order_123", status=Payment.Status.PENDING)
+        self.assertEqual(self.client.post(self.verify, {}).status_code, 400)
+        self.assertEqual(Payment.objects.get().status, Payment.Status.PENDING)
+
     def test_cod_not_available(self):
         self.assertContains(self.client.get(reverse("checkout")), "Cash on delivery is not available yet")
+
+    def test_order_page_only_auto_starts_for_active_checkout(self):
+        response = self.client.get(reverse("order_confirmation", args=[self.order.number]))
+        self.assertContains(response, "sessionStorage.getItem('harvis-checkout-active')")
+        self.assertContains(response, "Pay in test mode")
+        self.assertNotContains(response, "will confirm your order")
