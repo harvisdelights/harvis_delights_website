@@ -10,6 +10,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from .models import Order, Payment
+from .services import payments
 
 
 @override_settings(RAZORPAY_KEY_ID="rzp_test_example", RAZORPAY_KEY_SECRET="secret", RAZORPAY_WEBHOOK_SECRET="webhook-secret", STORAGES={"default": {"BACKEND": "django.core.files.storage.FileSystemStorage"}, "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"}})
@@ -83,6 +84,54 @@ class PaymentTests(TestCase):
         for _ in range(2):
             self.assertEqual(self.client.post(self.webhook, payload, content_type="application/json", HTTP_X_RAZORPAY_SIGNATURE=signature).status_code, 200)
         self.assertEqual(Payment.objects.get().status, Payment.Status.PAID)
+
+    @patch("store.services.payments.request_api")
+    def test_reconcile_recovers_only_matching_unrefunded_capture(self, api):
+        payment = Payment.objects.create(order=self.order, environment=Payment.Environment.TEST, gateway_order_id="order_123", status=Payment.Status.PENDING)
+        api.return_value = {"count": 1, "items": [{**self.entity, "amount_refunded": 0}]}
+        self.assertTrue(payments.reconcile_pending(payment))
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, Payment.Status.PAID)
+        self.assertEqual(payment.gateway_payment_id, "pay_123")
+        api.assert_called_once_with("GET", "orders/order_123/payments")
+
+    @patch("store.services.payments.request_api")
+    def test_reconcile_refund_and_ambiguous_responses_do_not_mark_paid(self, api):
+        payment = Payment.objects.create(order=self.order, environment=Payment.Environment.TEST, gateway_order_id="order_123", status=Payment.Status.PENDING)
+        api.return_value = {"count": 1, "items": [{**self.entity, "amount_refunded": 1}]}
+        self.assertFalse(payments.reconcile_pending(payment))
+        api.return_value = {"count": 2, "items": [{**self.entity, "amount_refunded": 0}]}
+        with self.assertRaises(ValueError):
+            payments.reconcile_pending(payment)
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, Payment.Status.PENDING)
+
+    @patch("store.services.payments.request_api")
+    def test_reconcile_does_not_query_review_or_other_environment(self, api):
+        payment = Payment.objects.create(order=self.order, environment=Payment.Environment.LIVE, gateway_order_id="order_123", status=Payment.Status.PENDING)
+        self.assertFalse(payments.reconcile_pending(payment))
+        api.assert_not_called()
+
+    def test_late_capture_does_not_overwrite_manual_review(self):
+        payment = Payment.objects.create(order=self.order, environment=Payment.Environment.TEST, gateway_order_id="order_123", status=Payment.Status.REVIEW)
+        self.assertFalse(payments.record_capture("order_123", self.entity))
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, Payment.Status.REVIEW)
+
+    def test_refunded_capture_does_not_mark_pending_payment_paid(self):
+        payment = Payment.objects.create(order=self.order, environment=Payment.Environment.TEST, gateway_order_id="order_123", status=Payment.Status.PENDING)
+        self.assertFalse(payments.record_capture("order_123", {**self.entity, "amount_refunded": 1}))
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, Payment.Status.PENDING)
+
+    def test_account_labels_captured_payment_by_environment(self):
+        payment = Payment.objects.create(order=self.order, environment=Payment.Environment.LIVE, gateway_order_id="order_123", gateway_payment_id="pay_123", status=Payment.Status.PAID)
+        response = self.client.get(reverse("account"))
+        self.assertContains(response, "Payment captured")
+        self.assertNotContains(response, "Test payment captured")
+        payment.environment = Payment.Environment.LEGACY
+        payment.save(update_fields=["environment"])
+        self.assertContains(self.client.get(reverse("account")), "environment unverified")
 
     def test_other_customer_cannot_start_payment(self):
         other = get_user_model().objects.create_user(username="other")

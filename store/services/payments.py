@@ -1,5 +1,6 @@
 import hashlib
 import hmac
+import re
 
 import requests
 from django.conf import settings
@@ -48,7 +49,27 @@ def record_capture(gateway_order_id, entity):
             return False
         if payment.status == Payment.Status.PAID:
             return payment.gateway_payment_id == payment_id
+        # Never overwrite a manual-review decision with a late gateway event.
+        if payment.status != Payment.Status.PENDING or entity.get("amount_refunded", 0) != 0:
+            return False
         payment.gateway_payment_id = payment_id
         payment.status = Payment.Status.PAID
         payment.save(update_fields=["gateway_payment_id", "status", "updated_at"])
         return True
+
+
+def reconcile_pending(payment):
+    """Recover a missing capture from Razorpay; never create or retry a charge."""
+    if (not configured() or not compatible(payment) or payment.status != Payment.Status.PENDING
+            or not re.fullmatch(r"order_[A-Za-z0-9]{1,94}", payment.gateway_order_id or "")):
+        return False
+    result = request_api("GET", f"orders/{payment.gateway_order_id}/payments")
+    if (not isinstance(result, dict) or not isinstance(result.get("items"), list)
+            or result.get("count") != len(result["items"])):
+        raise ValueError("Invalid gateway response")
+    items = result["items"]
+    captured = [item for item in items if isinstance(item, dict) and item.get("status") == "captured"]
+    # Ambiguity, refunds and unexpected data require a manual investigation.
+    if len(captured) != 1 or captured[0].get("amount_refunded") != 0:
+        return False
+    return record_capture(payment.gateway_order_id, captured[0])

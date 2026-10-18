@@ -1,5 +1,8 @@
 from django.contrib import admin
-from django.db import transaction
+from django.contrib import messages
+from django.db import IntegrityError, transaction
+import requests
+from .services import payments
 from .models import Category, CustomerAddress, Order, OrderEmail, OrderItem, Payment, Product, ProductImage
 from .services.notifications import deliver_order_email, queue_order_status_email
 
@@ -79,6 +82,21 @@ class PaymentAdmin(admin.ModelAdmin):
     list_filter = ("environment", "status")
     readonly_fields = ("order", "environment", "status", "gateway_order_id", "gateway_payment_id", "created_at", "updated_at")
     search_fields = ("order__number", "gateway_order_id", "gateway_payment_id")
+    actions = ["reconcile_pending_payments"]
+
+    @admin.action(description="Check selected awaiting payments with Razorpay")
+    def reconcile_pending_payments(self, request, queryset):
+        recovered = 0
+        not_recovered = 0
+        for payment in queryset.select_related("order"):
+            try:
+                if payments.reconcile_pending(payment):
+                    recovered += 1
+                else:
+                    not_recovered += 1
+            except (requests.RequestException, ValueError, TypeError, IntegrityError, transaction.TransactionManagementError):
+                not_recovered += 1
+        self.message_user(request, f"Confirmed {recovered} captured payment(s); {not_recovered} need review or are not eligible. Check Razorpay before retrying.", level=messages.WARNING if not_recovered else messages.SUCCESS)
 
     def has_add_permission(self, request):
         return False
