@@ -39,6 +39,8 @@ If gateway order creation times out, the record is marked for manual review and 
 
 Payment records now include an environment label. Existing records are marked "Legacy / unverified" because their original environment cannot be established safely from the database alone; new payment records created by the current test-only flow are marked "Test". This label is audit groundwork, not a live-mode implementation. Live keys are still deliberately rejected. Do not change the live-key guard without implementing mode isolation for orders and webhooks, reconciliation, refunds, and testing the full payment lifecycle.
 
+Orders also have an environment label. Pre-existing orders are marked "Legacy / unverified", including orders without a payment record; orders created by the current test-only checkout are labelled "Test". These labels are not enforcement by themselves. Future live checkout must reject legacy and test orders, even when they have no payment record.
+
 The checkout estimate starts from **Harvi's Delights, Nizampet, 500090**. Add either `SHIPROCKET_API_TOKEN` or both `SHIPROCKET_EMAIL` and `SHIPROCKET_PASSWORD` as secret Render environment variables to enable Shiprocket serviceability and estimated delivery times. Without those credentials, checkout continues to work and displays a standard 4-7 business-day estimate. This integration is read-only: it does not create Shiprocket shipments, charges, or pickup locations.
 
 Before dispatching live Shiprocket orders, create the pickup location in Shiprocket with the seller's complete street address, city/state, contact name, and phone number. Do not commit Shiprocket credentials to Git.

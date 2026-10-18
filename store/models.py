@@ -57,6 +57,10 @@ class CustomerAddress(models.Model):
 
 
 class Order(models.Model):
+    class Environment(models.TextChoices):
+        LEGACY = "legacy", "Legacy / unverified"
+        TEST = "test", "Test"
+
     class Status(models.TextChoices):
         PENDING = "pending", "Pending confirmation"
         CONFIRMED = "confirmed", "Confirmed"
@@ -66,6 +70,7 @@ class Order(models.Model):
         CANCELLED = "cancelled", "Cancelled"
 
     number = models.CharField(max_length=28, unique=True, editable=False)
+    environment = models.CharField(max_length=12, choices=Environment.choices, default=Environment.LEGACY, editable=False)
     checkout_id = models.UUIDField(null=True, unique=True, editable=False)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="orders", on_delete=models.PROTECT)
     address = models.ForeignKey(CustomerAddress, related_name="orders", null=True, on_delete=models.SET_NULL)

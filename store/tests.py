@@ -86,6 +86,7 @@ class CheckoutTests(TestCase):
         order = Order.objects.get()
         self.assertEqual(order.total, Decimal("200.00"))
         self.assertEqual(order.status, Order.Status.CONFIRMED)
+        self.assertEqual(order.environment, Order.Environment.TEST)
         self.assertEqual(order.items.get().unit_price, Decimal("100.00"))
 
     @patch("store.views.delivery_estimate", return_value={"message": "To be confirmed", "courier": ""})

@@ -204,7 +204,7 @@ def checkout(request):
                                 if missing or quote.get("lines") != _quote_lines(products, quantities):
                                     raise ValueError("Your cart or prices changed. Please review the current items and total before ordering.")
                                 address = CustomerAddress.objects.create(user=request.user, **{key: form.cleaned_data[key] for key in ("full_name", "phone", "line1", "line2", "city", "state", "pincode")})
-                                order = Order.objects.create(checkout_id=checkout_id, user=request.user, address=address, status=Order.Status.CONFIRMED, subtotal=subtotal, total=subtotal, delivery_estimate=estimate["message"], shiprocket_courier=estimate["courier"])
+                                order = Order.objects.create(checkout_id=checkout_id, user=request.user, address=address, environment=Order.Environment.TEST, status=Order.Status.CONFIRMED, subtotal=subtotal, total=subtotal, delivery_estimate=estimate["message"], shiprocket_courier=estimate["courier"])
                                 OrderItem.objects.bulk_create([OrderItem(order=order, product=p, product_name=p.name, unit_price=p.price, quantity=quantities[p.id]) for p in products])
                                 queue_new_order_emails(order)
                         except ValueError as exc:
