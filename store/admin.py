@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.contrib import messages
+from django import forms
 from django.db import IntegrityError, transaction
 import requests
 from .services import payments
@@ -35,8 +36,24 @@ class OrderItemInline(admin.TabularInline):
     readonly_fields = ("product", "product_name", "unit_price", "quantity")
     can_delete = False
 
+
+class OrderAdminForm(forms.ModelForm):
+    class Meta:
+        model = Order
+        fields = "__all__"
+
+    def clean_status(self):
+        status = self.cleaned_data["status"]
+        if (self.instance.pk and self.instance.environment == Order.Environment.LIVE
+                and status in (Order.Status.PACKED, Order.Status.SHIPPED, Order.Status.DELIVERED)):
+            payment = Payment.objects.select_for_update().filter(order=self.instance).first()
+            if not payment or payment.environment != Payment.Environment.LIVE or payment.status != Payment.Status.PAID:
+                raise forms.ValidationError("Live orders can only be fulfilled when their live payment is captured and not under review.")
+        return status
+
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
+    form = OrderAdminForm
     list_display = ("number", "user", "environment", "status", "payment_status", "total", "delivery_estimate", "created_at")
     list_filter = ("environment", "status", "payment_method")
     search_fields = ("number", "user__email", "user__first_name")
@@ -84,7 +101,7 @@ class PaymentAdmin(admin.ModelAdmin):
     search_fields = ("order__number", "gateway_order_id", "gateway_payment_id")
     actions = ["reconcile_pending_payments"]
 
-    @admin.action(description="Check selected awaiting payments with Razorpay")
+    @admin.action(description="Check selected awaiting or captured payments with Razorpay")
     def reconcile_pending_payments(self, request, queryset):
         recovered = 0
         not_recovered = 0

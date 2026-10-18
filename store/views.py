@@ -204,7 +204,7 @@ def checkout(request):
                                 if missing or quote.get("lines") != _quote_lines(products, quantities):
                                     raise ValueError("Your cart or prices changed. Please review the current items and total before ordering.")
                                 address = CustomerAddress.objects.create(user=request.user, **{key: form.cleaned_data[key] for key in ("full_name", "phone", "line1", "line2", "city", "state", "pincode")})
-                                order = Order.objects.create(checkout_id=checkout_id, user=request.user, address=address, environment=Order.Environment.TEST if settings.RAZORPAY_MODE == "test" else Order.Environment.LEGACY, status=Order.Status.CONFIRMED, subtotal=subtotal, total=subtotal, delivery_estimate=estimate["message"], shiprocket_courier=estimate["courier"])
+                                order = Order.objects.create(checkout_id=checkout_id, user=request.user, address=address, environment=settings.RAZORPAY_MODE if settings.RAZORPAY_MODE in ("test", "live") else Order.Environment.LEGACY, status=Order.Status.CONFIRMED, subtotal=subtotal, total=subtotal, delivery_estimate=estimate["message"], shiprocket_courier=estimate["courier"])
                                 OrderItem.objects.bulk_create([OrderItem(order=order, product=p, product_name=p.name, unit_price=p.price, quantity=quantities[p.id]) for p in products])
                                 queue_new_order_emails(order)
                         except ValueError as exc:
@@ -224,7 +224,7 @@ def checkout(request):
 @login_required
 def order_confirmation(request, number):
     order = get_object_or_404(Order.objects.prefetch_related("items"), number=number, user=request.user)
-    eligible_mode = settings.RAZORPAY_MODE == "test" or order.environment == Order.Environment.LIVE
+    eligible_mode = order.environment == settings.RAZORPAY_MODE or (settings.RAZORPAY_MODE == "test" and order.environment == Order.Environment.LEGACY)
     return render(request, "store/order_confirmation.html", {"order": order, "payment_enabled": payments.configured() and eligible_mode, "payment_mode": settings.RAZORPAY_MODE})
 
 
@@ -234,7 +234,7 @@ def payment_start(request, number):
     order = get_object_or_404(Order, number=number, user=request.user)
     if not payments.configured():
         return JsonResponse({"detail": "Payments are not configured."}, status=503)
-    if settings.RAZORPAY_MODE == "live" and order.environment != Order.Environment.LIVE:
+    if order.environment != settings.RAZORPAY_MODE and not (settings.RAZORPAY_MODE == "test" and order.environment == Order.Environment.LEGACY):
         return JsonResponse({"detail": "This older order cannot be paid in live mode. Please place a new order."}, status=409)
     if order.status not in (Order.Status.PENDING, Order.Status.CONFIRMED) or order.total < Decimal("1.00") or order.shipping_charge != 0:
         return JsonResponse({"detail": "This order is not eligible for payment."}, status=400)
@@ -300,6 +300,16 @@ def razorpay_webhook(request):
             entity = payload["payload"]["payment"]["entity"]
             if not payments.record_capture(entity.get("order_id"), entity):
                 return HttpResponse(status=400)
+        elif payload.get("event") in ("refund.created", "refund.processed", "refund.failed"):
+            refund = payload["payload"]["refund"]["entity"]
+            payment_id = refund["payment_id"]
+            if not isinstance(payment_id, str) or not re.fullmatch(r"pay_[A-Za-z0-9]{1,96}", payment_id):
+                return HttpResponse(status=400)
+            entity = payments.request_api("GET", f"payments/{payment_id}")
+            if entity.get("id") != payment_id or not payments.flag_refund(entity):
+                return HttpResponse(status=503)
+    except requests.RequestException:
+        return HttpResponse(status=503)
     except (ValueError, TypeError, KeyError, AttributeError, IntegrityError):
         return HttpResponse(status=400)
     return HttpResponse(status=200)

@@ -11,6 +11,8 @@ from django.urls import reverse
 
 from .models import Order, Payment
 from .services import payments
+from .admin import OrderAdminForm
+from django.core.exceptions import ValidationError
 
 
 @override_settings(RAZORPAY_KEY_ID="rzp_test_example", RAZORPAY_KEY_SECRET="secret", RAZORPAY_WEBHOOK_SECRET="webhook-secret", STORAGES={"default": {"BACKEND": "django.core.files.storage.FileSystemStorage"}, "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"}})
@@ -100,6 +102,10 @@ class PaymentTests(TestCase):
         payment = Payment.objects.create(order=self.order, environment=Payment.Environment.TEST, gateway_order_id="order_123", status=Payment.Status.PENDING)
         api.return_value = {"count": 1, "items": [{**self.entity, "amount_refunded": 1}]}
         self.assertFalse(payments.reconcile_pending(payment))
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, Payment.Status.REVIEW)
+        payment.status = Payment.Status.PENDING
+        payment.save(update_fields=["status"])
         api.return_value = {"count": 2, "items": [{**self.entity, "amount_refunded": 0}]}
         with self.assertRaises(ValueError):
             payments.reconcile_pending(payment)
@@ -122,7 +128,51 @@ class PaymentTests(TestCase):
         payment = Payment.objects.create(order=self.order, environment=Payment.Environment.TEST, gateway_order_id="order_123", status=Payment.Status.PENDING)
         self.assertFalse(payments.record_capture("order_123", {**self.entity, "amount_refunded": 1}))
         payment.refresh_from_db()
-        self.assertEqual(payment.status, Payment.Status.PENDING)
+        self.assertEqual(payment.status, Payment.Status.REVIEW)
+
+    @override_settings(RAZORPAY_MODE="live", RAZORPAY_LIVE_ENABLED=True, RAZORPAY_KEY_ID="rzp_live_example")
+    @patch("store.services.payments.request_api", return_value={"id": "order_123", "amount": 54900, "currency": "INR"})
+    def test_live_start_requires_live_order_and_creates_live_payment(self, api):
+        self.assertEqual(self.client.post(self.start).status_code, 409)
+        self.order.environment = Order.Environment.LIVE
+        self.order.save(update_fields=["environment"])
+        self.assertEqual(self.client.post(self.start).status_code, 200)
+        self.assertEqual(Payment.objects.get().environment, Payment.Environment.LIVE)
+
+    @patch("store.services.payments.request_api")
+    def test_signed_refund_webhook_blocks_late_capture(self, api):
+        payment = Payment.objects.create(order=self.order, environment=Payment.Environment.TEST, gateway_order_id="order_123", gateway_payment_id="pay_123", status=Payment.Status.PAID)
+        api.return_value = {**self.entity, "amount_refunded": 100}
+        payload = json.dumps({"event": "refund.processed", "payload": {"refund": {"entity": {"payment_id": "pay_123"}}}}).encode()
+        signature = hmac.new(b"webhook-secret", payload, hashlib.sha256).hexdigest()
+        self.assertEqual(self.client.post(self.webhook, payload, content_type="application/json", HTTP_X_RAZORPAY_SIGNATURE=signature).status_code, 200)
+        self.assertFalse(payments.record_capture("order_123", self.entity))
+        payment.refresh_from_db()
+        self.assertEqual(payment.status, Payment.Status.REVIEW)
+
+    def test_live_fulfillment_requires_captured_live_payment(self):
+        self.order.environment = Order.Environment.LIVE
+        self.order.save(update_fields=["environment"])
+        form = OrderAdminForm(instance=self.order)
+        form.cleaned_data = {"status": Order.Status.SHIPPED}
+        with self.assertRaises(ValidationError):
+            form.clean_status()
+        payment = Payment.objects.create(order=self.order, environment=Payment.Environment.LIVE, status=Payment.Status.PAID)
+        self.assertEqual(form.clean_status(), Order.Status.SHIPPED)
+        payment.status = Payment.Status.REVIEW
+        payment.save(update_fields=["status"])
+        with self.assertRaises(ValidationError):
+            form.clean_status()
+
+    @override_settings(RAZORPAY_MODE="live", RAZORPAY_LIVE_ENABLED=True, RAZORPAY_KEY_ID="rzp_test_example")
+    def test_live_mode_rejects_test_keys(self):
+        self.assertFalse(payments.configured())
+
+    @patch("store.services.payments.request_api")
+    def test_refund_webhook_rejects_bad_signature_without_fetch(self, api):
+        payload = json.dumps({"event": "refund.created", "payload": {"refund": {"entity": {"payment_id": "pay_123"}}}}).encode()
+        self.assertEqual(self.client.post(self.webhook, payload, content_type="application/json", HTTP_X_RAZORPAY_SIGNATURE="bad").status_code, 400)
+        api.assert_not_called()
 
     def test_account_labels_captured_payment_by_environment(self):
         payment = Payment.objects.create(order=self.order, environment=Payment.Environment.LIVE, gateway_order_id="order_123", gateway_payment_id="pay_123", status=Payment.Status.PAID)
