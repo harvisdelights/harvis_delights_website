@@ -236,7 +236,7 @@ def payment_start(request, number):
     if order.status not in (Order.Status.PENDING, Order.Status.CONFIRMED) or order.total < Decimal("1.00") or order.shipping_charge != 0:
         return JsonResponse({"detail": "This order is not eligible for payment."}, status=400)
     try:
-        payment, created = Payment.objects.get_or_create(order=order)
+        payment, created = Payment.objects.get_or_create(order=order, defaults={"environment": Payment.Environment.TEST})
     except IntegrityError:
         payment = Payment.objects.get(order=order)
         created = False

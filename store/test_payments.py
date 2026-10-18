@@ -29,6 +29,13 @@ class PaymentTests(TestCase):
         self.assertEqual(self.client.post(self.start).json()["order_id"], "order_123")
         self.assertEqual(api.call_count, 1)
         self.assertEqual(Payment.objects.count(), 1)
+        self.assertEqual(Payment.objects.get().environment, Payment.Environment.TEST)
+
+    def test_existing_payment_environment_remains_unverified(self):
+        payment = Payment.objects.create(order=self.order, gateway_order_id="order_123", status=Payment.Status.PENDING)
+        self.assertEqual(self.client.post(self.start).status_code, 200)
+        payment.refresh_from_db()
+        self.assertEqual(payment.environment, Payment.Environment.LEGACY)
 
     @patch("store.services.payments.request_api", side_effect=requests.Timeout())
     def test_uncertain_creation_never_retries_automatically(self, api):

@@ -103,6 +103,10 @@ class OrderItem(models.Model):
 
 
 class Payment(models.Model):
+    class Environment(models.TextChoices):
+        LEGACY = "legacy", "Legacy / unverified"
+        TEST = "test", "Test"
+
     class Status(models.TextChoices):
         CREATING = "creating", "Creating gateway order"
         PENDING = "pending", "Awaiting payment"
@@ -110,6 +114,7 @@ class Payment(models.Model):
         REVIEW = "review", "Needs manual review"
 
     order = models.OneToOneField(Order, related_name="payment", on_delete=models.PROTECT)
+    environment = models.CharField(max_length=12, choices=Environment.choices, default=Environment.LEGACY, editable=False)
     gateway_order_id = models.CharField(max_length=100, unique=True, null=True, blank=True)
     gateway_payment_id = models.CharField(max_length=100, unique=True, null=True, blank=True)
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.CREATING)

@@ -75,8 +75,9 @@ class OrderEmailAdmin(admin.ModelAdmin):
 
 @admin.register(Payment)
 class PaymentAdmin(admin.ModelAdmin):
-    list_display = ("order", "status", "gateway_order_id", "gateway_payment_id", "updated_at")
-    readonly_fields = ("order", "status", "gateway_order_id", "gateway_payment_id", "created_at", "updated_at")
+    list_display = ("order", "environment", "status", "gateway_order_id", "gateway_payment_id", "updated_at")
+    list_filter = ("environment", "status")
+    readonly_fields = ("order", "environment", "status", "gateway_order_id", "gateway_payment_id", "created_at", "updated_at")
     search_fields = ("order__number", "gateway_order_id", "gateway_payment_id")
 
     def has_add_permission(self, request):
