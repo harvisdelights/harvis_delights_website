@@ -204,7 +204,7 @@ def checkout(request):
                                 if missing or quote.get("lines") != _quote_lines(products, quantities):
                                     raise ValueError("Your cart or prices changed. Please review the current items and total before ordering.")
                                 address = CustomerAddress.objects.create(user=request.user, **{key: form.cleaned_data[key] for key in ("full_name", "phone", "line1", "line2", "city", "state", "pincode")})
-                                order = Order.objects.create(checkout_id=checkout_id, user=request.user, address=address, environment=Order.Environment.TEST, status=Order.Status.CONFIRMED, subtotal=subtotal, total=subtotal, delivery_estimate=estimate["message"], shiprocket_courier=estimate["courier"])
+                                order = Order.objects.create(checkout_id=checkout_id, user=request.user, address=address, environment=Order.Environment.TEST if settings.RAZORPAY_MODE == "test" else Order.Environment.LEGACY, status=Order.Status.CONFIRMED, subtotal=subtotal, total=subtotal, delivery_estimate=estimate["message"], shiprocket_courier=estimate["courier"])
                                 OrderItem.objects.bulk_create([OrderItem(order=order, product=p, product_name=p.name, unit_price=p.price, quantity=quantities[p.id]) for p in products])
                                 queue_new_order_emails(order)
                         except ValueError as exc:
@@ -219,12 +219,13 @@ def checkout(request):
                                 raise
                         else:
                             return redirect("order_confirmation", number=order.number)
-    return render(request, "store/checkout.html", {"form": form, "checkout_id": checkout_id, "seller_origin": f"{SELLER_NAME}, {SELLER_AREA} – {SELLER_PINCODE}", "payment_enabled": payments.configured()})
+    return render(request, "store/checkout.html", {"form": form, "checkout_id": checkout_id, "seller_origin": f"{SELLER_NAME}, {SELLER_AREA} – {SELLER_PINCODE}", "payment_enabled": payments.configured(), "payment_mode": settings.RAZORPAY_MODE})
 
 @login_required
 def order_confirmation(request, number):
     order = get_object_or_404(Order.objects.prefetch_related("items"), number=number, user=request.user)
-    return render(request, "store/order_confirmation.html", {"order": order, "payment_enabled": payments.configured()})
+    eligible_mode = settings.RAZORPAY_MODE == "test" or order.environment == Order.Environment.LIVE
+    return render(request, "store/order_confirmation.html", {"order": order, "payment_enabled": payments.configured() and eligible_mode, "payment_mode": settings.RAZORPAY_MODE})
 
 
 @login_required
@@ -232,14 +233,18 @@ def order_confirmation(request, number):
 def payment_start(request, number):
     order = get_object_or_404(Order, number=number, user=request.user)
     if not payments.configured():
-        return JsonResponse({"detail": "Test payments are not configured."}, status=503)
+        return JsonResponse({"detail": "Payments are not configured."}, status=503)
+    if settings.RAZORPAY_MODE == "live" and order.environment != Order.Environment.LIVE:
+        return JsonResponse({"detail": "This older order cannot be paid in live mode. Please place a new order."}, status=409)
     if order.status not in (Order.Status.PENDING, Order.Status.CONFIRMED) or order.total < Decimal("1.00") or order.shipping_charge != 0:
         return JsonResponse({"detail": "This order is not eligible for payment."}, status=400)
     try:
-        payment, created = Payment.objects.get_or_create(order=order, defaults={"environment": Payment.Environment.TEST})
+        payment, created = Payment.objects.get_or_create(order=order, defaults={"environment": settings.RAZORPAY_MODE})
     except IntegrityError:
         payment = Payment.objects.get(order=order)
         created = False
+    if not payments.compatible(payment):
+        return JsonResponse({"detail": "This payment belongs to another environment. Please place a new order."}, status=409)
     if created:
         try:
             remote = payments.request_api("POST", "orders", json={"amount": int(order.total * 100), "currency": "INR", "receipt": order.number})
@@ -267,7 +272,7 @@ def payment_start(request, number):
 @require_POST
 def payment_verify(request, number):
     payment = get_object_or_404(Payment.objects.select_related("order"), order__number=number, order__user=request.user)
-    if not payments.configured() or not payment.gateway_order_id:
+    if not payments.configured() or not payment.gateway_order_id or not payments.compatible(payment):
         return JsonResponse({"detail": "Payment is not configured."}, status=503)
     gateway_order = request.POST.get("razorpay_order_id", "")
     payment_id = request.POST.get("razorpay_payment_id", "")

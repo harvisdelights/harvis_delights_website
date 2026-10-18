@@ -60,6 +60,7 @@ class Order(models.Model):
     class Environment(models.TextChoices):
         LEGACY = "legacy", "Legacy / unverified"
         TEST = "test", "Test"
+        LIVE = "live", "Live"
 
     class Status(models.TextChoices):
         PENDING = "pending", "Pending confirmation"
@@ -111,6 +112,7 @@ class Payment(models.Model):
     class Environment(models.TextChoices):
         LEGACY = "legacy", "Legacy / unverified"
         TEST = "test", "Test"
+        LIVE = "live", "Live"
 
     class Status(models.TextChoices):
         CREATING = "creating", "Creating gateway order"

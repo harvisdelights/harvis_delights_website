@@ -9,8 +9,16 @@ from store.models import Payment
 
 
 def configured():
-    # Deliberately refuse live keys until a production payment review is complete.
-    return bool(settings.RAZORPAY_KEY_ID.startswith("rzp_test_") and settings.RAZORPAY_KEY_SECRET and settings.RAZORPAY_WEBHOOK_SECRET)
+    mode = settings.RAZORPAY_MODE
+    # Real-money processing remains blocked until reconciliation and refunds are verified.
+    if mode != "test":
+        return False
+    return bool(settings.RAZORPAY_KEY_ID.startswith(f"rzp_{mode}_") and settings.RAZORPAY_KEY_SECRET and settings.RAZORPAY_WEBHOOK_SECRET)
+
+
+def compatible(payment):
+    # Legacy records remain usable only in test mode; never assume they are live.
+    return payment.environment == settings.RAZORPAY_MODE or (settings.RAZORPAY_MODE == "test" and payment.environment == Payment.Environment.LEGACY)
 
 
 def signature_valid(message, signature, secret):
@@ -30,7 +38,7 @@ def request_api(method, path, **kwargs):
 def record_capture(gateway_order_id, entity):
     with transaction.atomic():
         payment = Payment.objects.select_for_update().select_related("order").filter(gateway_order_id=gateway_order_id).first()
-        if not payment:
+        if not payment or not configured() or not compatible(payment):
             return False
         expected_amount = int(payment.order.total * 100)
         payment_id = entity.get("id")

@@ -8,10 +8,10 @@
   <div class="confirmation-detail"><span>Estimated delivery</span><b>{{ order.delivery_estimate|default:"To be confirmed" }}</b>{% if order.shiprocket_courier %}<small>Courier option: {{ order.shiprocket_courier }}</small>{% endif %}</div>
   <h2>Items</h2>{% for item in order.items.all %}<div class="confirmation-item"><span>{{ item.product_name }} &times; {{ item.quantity }}</span><b>&#8377;{{ item.unit_price }} each</b></div>{% endfor %}
   <div class="summary-total"><span>Total (free delivery)</span><strong>&#8377;{{ order.total }}</strong></div>
-  {% if order.payment.status == 'paid' %}<p><strong>Test payment captured.</strong> No real money was charged.</p>
+  {% if order.payment.status == 'paid' %}{% if order.payment.environment == 'live' %}<p><strong>Payment captured.</strong></p>{% elif order.payment.environment == 'test' %}<p><strong>Test payment captured.</strong> No real money was charged.</p>{% else %}<p><strong>Historical payment captured.</strong> Contact the seller to verify its environment.</p>{% endif %}
   {% elif payment_enabled and order.status != 'cancelled' %}
-  <p>Online payment is in test mode: no real money will be charged. Cash on delivery is not available yet.</p>
-  <button type="button" class="button" id="pay-button">Pay in test mode</button>
+  {% if payment_mode == 'live' %}<p>Pay securely through Razorpay. Cash on delivery is not available yet.</p>{% else %}<p>Online payment is in test mode: no real money will be charged. Cash on delivery is not available yet.</p>{% endif %}
+  <button type="button" class="button" id="pay-button">{% if payment_mode == 'live' %}Pay now{% else %}Pay in test mode{% endif %}</button>
   <p id="payment-message" role="status"></p>
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   <script>
@@ -28,7 +28,7 @@
         if (!result.ok) throw new Error(data.detail || 'Unable to start payment.');
         if (typeof Razorpay === 'undefined') throw new Error('Payment window could not load. Please try again.');
         const checkout = new Razorpay({key:data.key, order_id:data.order_id, amount:data.amount, currency:data.currency, name:data.name,
-          description:'Test payment for ' + data.reference,
+          description:'Payment for ' + data.reference,
           handler: async function(response) {
             const body = new URLSearchParams(response);
             try {

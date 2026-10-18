@@ -49,6 +49,19 @@ class PaymentTests(TestCase):
         self.assertEqual(self.client.post(self.start).status_code, 503)
         self.assertFalse(Payment.objects.exists())
 
+    @override_settings(RAZORPAY_MODE="live", RAZORPAY_KEY_ID="rzp_live_example")
+    def test_live_mode_remains_disabled(self):
+        self.assertEqual(self.client.post(self.start).status_code, 503)
+        self.assertFalse(Payment.objects.exists())
+
+    @override_settings(RAZORPAY_MODE="invalid")
+    def test_invalid_mode_remains_disabled(self):
+        self.assertEqual(self.client.post(self.start).status_code, 503)
+
+    def test_payment_from_other_environment_cannot_be_reused(self):
+        Payment.objects.create(order=self.order, environment=Payment.Environment.LIVE, gateway_order_id="order_123", status=Payment.Status.PENDING)
+        self.assertEqual(self.client.post(self.start).status_code, 409)
+
     @patch("store.services.payments.request_api")
     def test_verify_requires_signature_and_captured_amount(self, api):
         Payment.objects.create(order=self.order, gateway_order_id="order_123", status=Payment.Status.PENDING)
