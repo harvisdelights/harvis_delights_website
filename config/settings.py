@@ -81,6 +81,19 @@ RAZORPAY_KEY_SECRET = os.environ.get("RAZORPAY_KEY_SECRET", "").strip()
 RAZORPAY_WEBHOOK_SECRET = os.environ.get("RAZORPAY_WEBHOOK_SECRET", "").strip()
 RAZORPAY_MODE = os.environ.get("RAZORPAY_MODE", "test").strip().lower()
 RAZORPAY_LIVE_ENABLED = env_bool("RAZORPAY_LIVE_ENABLED", False)
+
+# Render collects stdout/stderr. Keep request tracebacks available in its logs
+# when DEBUG is disabled, without exposing them to customers.
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "console": {"class": "logging.StreamHandler"},
+    },
+    "loggers": {
+        "django.request": {"handlers": ["console"], "level": "ERROR", "propagate": False},
+    },
+}
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
