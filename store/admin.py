@@ -2,6 +2,7 @@ from django.contrib import admin
 from django.contrib import messages
 from django import forms
 from django.db import IntegrityError, transaction
+from django.utils.html import format_html_join
 import requests
 from .services import payments
 from .models import Category, CustomerAddress, Order, OrderEmail, OrderItem, Payment, Product, ProductImage
@@ -57,7 +58,7 @@ class OrderAdmin(admin.ModelAdmin):
     list_display = ("number", "user", "environment", "status", "payment_status", "total", "delivery_estimate", "created_at")
     list_filter = ("environment", "status")
     search_fields = ("number", "user__email", "user__first_name")
-    readonly_fields = ("number", "checkout_id", "user", "environment", "address", "subtotal", "shipping_charge", "total", "delivery_estimate", "shiprocket_courier", "created_at", "updated_at")
+    readonly_fields = ("number", "checkout_id", "user", "environment", "address", "shipping_address", "subtotal", "shipping_charge", "total", "delivery_estimate", "shiprocket_courier", "created_at", "updated_at")
     inlines = [OrderItemInline]
 
     @admin.display(description="Online payment")
@@ -66,6 +67,18 @@ class OrderAdmin(admin.ModelAdmin):
             return obj.payment.get_status_display()
         except Payment.DoesNotExist:
             return "Not paid online"
+
+    @admin.display(description="Delivery address")
+    def shipping_address(self, obj):
+        """Show the delivery-address record created with this checkout."""
+        if not obj.address_id:
+            return "No delivery address recorded"
+        address = obj.address
+        lines = [address.full_name, address.line1]
+        if address.line2:
+            lines.append(address.line2)
+        lines.extend((f"{address.city}, {address.state} - {address.pincode}", f"Phone: {address.phone}"))
+        return format_html_join("<br>", "{}", ((line,) for line in lines))
 
     def save_model(self, request, obj, form, change):
         status_changed = change and "status" in form.changed_data
