@@ -65,6 +65,15 @@ def record_capture(gateway_order_id, entity):
         payment.gateway_payment_id = payment_id
         payment.status = Payment.Status.PAID
         payment.save(update_fields=["gateway_payment_id", "status", "updated_at"])
+        if payment.order.status == payment.order.Status.PENDING:
+            payment.order.status = payment.order.Status.CONFIRMED
+            payment.order.save(update_fields=["status", "updated_at"])
+
+        # Queue receipts only for the first verified transition to captured.
+        # on_commit prevents an email from being created for a rolled-back
+        # gateway verification transaction.
+        from store.services.notifications import queue_payment_captured_emails
+        transaction.on_commit(lambda pk=payment.pk: queue_payment_captured_emails(pk), robust=True)
         return True
 
 

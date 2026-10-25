@@ -11,7 +11,7 @@
   {% if order.payment.status == 'paid' %}{% if order.payment.environment == 'live' %}<p><strong>Payment captured.</strong></p>{% elif order.payment.environment == 'test' %}<p><strong>Test payment captured.</strong> No real money was charged.</p>{% else %}<p><strong>Historical payment captured.</strong> Contact the seller to verify its environment.</p>{% endif %}
   {% elif order.payment.status == 'review' %}<p>Payment requires review. Please contact the seller before retrying.</p>
   {% elif payment_enabled and order.status != 'cancelled' %}
-  {% if payment_mode == 'live' %}<p>Pay securely through Razorpay. Cash on delivery is not available yet.</p>{% else %}<p>Online payment is in test mode: no real money will be charged. Cash on delivery is not available yet.</p>{% endif %}
+  {% if payment_mode == 'live' %}<p>Complete secure payment through Razorpay to confirm your order.</p>{% else %}<p>Online payment is in test mode: no real money will be charged.</p>{% endif %}
   <button type="button" class="button" id="pay-button">{% if payment_mode == 'live' %}Pay now{% else %}Pay in test mode{% endif %}</button>
   <p id="payment-message" role="status"></p>
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
@@ -53,7 +53,7 @@
     if (sessionStorage.getItem('harvis-checkout-active') === '{{ order.checkout_id }}') startPayment();
   })();
   </script>
-  {% else %}<p>Online payment is unavailable for this order. Contact the seller to confirm its payment status. Cash on delivery is not available yet.</p>{% endif %}
+  {% else %}<p>Online payment is unavailable for this order. No order confirmation or fulfillment will occur until payment can be verified.</p>{% endif %}
   <a class="button" href="{% url 'products' %}">Continue shopping</a>
 </section></main>
 {% if order.checkout_id %}<script>

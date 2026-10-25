@@ -32,7 +32,12 @@ class ProductMediaTests(TestCase):
         self.assertEqual(response.status_code, 404)
 
 
-@override_settings(STORAGES={"default": {"BACKEND": "django.core.files.storage.FileSystemStorage"}, "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"}})
+@override_settings(
+    STORAGES={"default": {"BACKEND": "django.core.files.storage.FileSystemStorage"}, "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"}},
+    RAZORPAY_KEY_ID="rzp_test_example",
+    RAZORPAY_KEY_SECRET="secret",
+    RAZORPAY_WEBHOOK_SECRET="webhook-secret",
+)
 class CheckoutTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(username="buyer", password="test-password")
@@ -107,7 +112,7 @@ class CheckoutTests(TestCase):
         self.assertEqual(CustomerAddress.objects.count(), 1)
         order = Order.objects.get()
         self.assertEqual(order.total, Decimal("200.00"))
-        self.assertEqual(order.status, Order.Status.CONFIRMED)
+        self.assertEqual(order.status, Order.Status.PENDING)
         self.assertEqual(order.environment, Order.Environment.TEST)
         self.assertEqual(order.items.get().unit_price, Decimal("100.00"))
 

@@ -64,8 +64,12 @@
         const previous = cart.find(entry => String(entry.id) === String(item.id));
         return !previous || Number(previous.price) !== Number(item.price);
       });
-      message.textContent = changed ? 'Prices have changed since you added items. Please review the updated total before ordering.' : 'Current prices verified. Please review your order.';
+      message.textContent = changed ? 'Prices have changed since you added items. Please review the updated total before payment.' : 'Current prices verified. Please continue to secure payment.';
       quote.value = result.quote;
+      if (!window.checkoutConfig.paymentEnabled) {
+        message.textContent = 'Online payment is temporarily unavailable. No order can be placed.';
+        return;
+      }
       submit.disabled = false;
     } catch (_) {
       if (version === reviewVersion) message.textContent = 'Could not review your cart. Please reload this page and try again.';
@@ -87,6 +91,11 @@
   });
 
   form.addEventListener('submit', event => {
+    if (!window.checkoutConfig.paymentEnabled) {
+      event.preventDefault();
+      message.textContent = 'Online payment is temporarily unavailable. No order was created.';
+      return;
+    }
     const current = localStorage.getItem(key) || '[]';
     if (!quote.value || current !== payload.value) {
       event.preventDefault();

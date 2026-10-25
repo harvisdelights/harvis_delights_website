@@ -55,7 +55,7 @@ class OrderAdminForm(forms.ModelForm):
 class OrderAdmin(admin.ModelAdmin):
     form = OrderAdminForm
     list_display = ("number", "user", "environment", "status", "payment_status", "total", "delivery_estimate", "created_at")
-    list_filter = ("environment", "status", "payment_method")
+    list_filter = ("environment", "status")
     search_fields = ("number", "user__email", "user__first_name")
     readonly_fields = ("number", "checkout_id", "user", "environment", "address", "subtotal", "shipping_charge", "total", "delivery_estimate", "shiprocket_courier", "created_at", "updated_at")
     inlines = [OrderItemInline]

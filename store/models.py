@@ -76,7 +76,6 @@ class Order(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="orders", on_delete=models.PROTECT)
     address = models.ForeignKey(CustomerAddress, related_name="orders", null=True, on_delete=models.SET_NULL)
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
-    payment_method = models.CharField(max_length=24, default="pay_on_confirmation")
     subtotal = models.DecimalField(max_digits=10, decimal_places=2)
     shipping_charge = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=10, decimal_places=2)
@@ -140,6 +139,9 @@ class OrderEmail(models.Model):
     recipient = models.EmailField()
     subject = models.CharField(max_length=200)
     body = models.TextField()
+    # Null is retained for historical/general notifications. Payment receipts
+    # use a unique key so repeated Razorpay callbacks cannot send duplicates.
+    deduplication_key = models.CharField(max_length=180, unique=True, null=True, blank=True, editable=False)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
     attempts = models.PositiveIntegerField(default=0)
     last_error = models.CharField(max_length=200, blank=True)

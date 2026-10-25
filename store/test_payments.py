@@ -9,7 +9,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from .models import Order, Payment
+from .models import Order, OrderEmail, Payment
 from .services import payments
 from .admin import OrderAdminForm
 from django.core.exceptions import ValidationError
@@ -86,6 +86,21 @@ class PaymentTests(TestCase):
         for _ in range(2):
             self.assertEqual(self.client.post(self.webhook, payload, content_type="application/json", HTTP_X_RAZORPAY_SIGNATURE=signature).status_code, 200)
         self.assertEqual(Payment.objects.get().status, Payment.Status.PAID)
+
+    def test_verified_capture_confirms_order_and_queues_one_receipt_pair(self):
+        self.user.email = "buyer@example.com"
+        self.user.save(update_fields=["email"])
+        payment = Payment.objects.create(order=self.order, gateway_order_id="order_123", status=Payment.Status.PENDING)
+
+        with self.captureOnCommitCallbacks(execute=True):
+            self.assertTrue(payments.record_capture("order_123", self.entity))
+            self.assertTrue(payments.record_capture("order_123", self.entity))
+
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.status, Order.Status.CONFIRMED)
+        receipts = OrderEmail.objects.filter(deduplication_key__startswith=f"payment-captured:{payment.pk}:")
+        self.assertEqual(receipts.count(), 2)
+        self.assertCountEqual(receipts.values_list("recipient", flat=True), [self.user.email, "hdcare@harvisdelights.com"])
 
     @patch("store.services.payments.request_api")
     def test_reconcile_recovers_only_matching_unrefunded_capture(self, api):
@@ -199,8 +214,18 @@ class PaymentTests(TestCase):
         self.assertEqual(self.client.post(self.verify, {}).status_code, 400)
         self.assertEqual(Payment.objects.get().status, Payment.Status.PENDING)
 
-    def test_cod_not_available(self):
-        self.assertContains(self.client.get(reverse("checkout")), "Cash on delivery is not available yet")
+    def test_checkout_has_no_cash_on_delivery_option(self):
+        response = self.client.get(reverse("checkout"))
+        self.assertContains(response, "Secure online payment")
+        self.assertNotContains(response, "Cash on delivery")
+
+    @override_settings(RAZORPAY_KEY_ID="")
+    def test_checkout_does_not_create_an_order_when_online_payment_is_unavailable(self):
+        quote = self.client.post(reverse("cart_review"), {"cart_payload": "[]"})
+        self.assertEqual(quote.status_code, 400)
+        response = self.client.post(reverse("checkout"), {"checkout_id": "not-a-checkout-id"})
+        self.assertContains(response, "No order was created")
+        self.assertEqual(Order.objects.count(), 1)  # Only self.order from setUp.
 
     def test_order_page_only_auto_starts_for_active_checkout(self):
         response = self.client.get(reverse("order_confirmation", args=[self.order.number]))

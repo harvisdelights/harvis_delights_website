@@ -196,6 +196,11 @@ def shipping_estimate(request):
 def checkout(request):
     form = CheckoutAddressForm(request.POST if request.method == "POST" else None, initial={"full_name": request.user.get_full_name(), "phone": ""})
     checkout_id = uuid.uuid4()
+    if request.method == "POST" and not payments.configured():
+        # Fail closed: an online-only store must never create an order that a
+        # customer cannot immediately take to the configured payment gateway.
+        form.add_error(None, "Online payment is temporarily unavailable. No order was created.")
+        return render(request, "store/checkout.html", {"form": form, "checkout_id": checkout_id, "seller_origin": f"{SELLER_NAME}, {SELLER_AREA} – {SELLER_PINCODE}", "payment_enabled": False, "payment_mode": settings.RAZORPAY_MODE})
     if request.method == "POST":
         try:
             checkout_id = uuid.UUID(request.POST.get("checkout_id", ""))
@@ -227,7 +232,7 @@ def checkout(request):
                                 if missing or quote.get("lines") != _quote_lines(products, quantities):
                                     raise ValueError("Your cart or prices changed. Please review the current items and total before ordering.")
                                 address = CustomerAddress.objects.create(user=request.user, **{key: form.cleaned_data[key] for key in ("full_name", "phone", "line1", "line2", "city", "state", "pincode")})
-                                order = Order.objects.create(checkout_id=checkout_id, user=request.user, address=address, environment=settings.RAZORPAY_MODE if settings.RAZORPAY_MODE in ("test", "live") else Order.Environment.LEGACY, status=Order.Status.CONFIRMED, subtotal=subtotal, total=subtotal, delivery_estimate=estimate["message"], shiprocket_courier=estimate["courier"])
+                                order = Order.objects.create(checkout_id=checkout_id, user=request.user, address=address, environment=settings.RAZORPAY_MODE if settings.RAZORPAY_MODE in ("test", "live") else Order.Environment.LEGACY, status=Order.Status.PENDING, subtotal=subtotal, total=subtotal, delivery_estimate=estimate["message"], shiprocket_courier=estimate["courier"])
                                 OrderItem.objects.bulk_create([OrderItem(order=order, product=p, product_name=p.name, unit_price=p.price, quantity=quantities[p.id]) for p in products])
                                 queue_new_order_emails(order)
                         except ValueError as exc:
@@ -259,7 +264,7 @@ def payment_start(request, number):
         return JsonResponse({"detail": "Payments are not configured."}, status=503)
     if order.environment != settings.RAZORPAY_MODE and not (settings.RAZORPAY_MODE == "test" and order.environment == Order.Environment.LEGACY):
         return JsonResponse({"detail": "This older order cannot be paid in live mode. Please place a new order."}, status=409)
-    if order.status not in (Order.Status.PENDING, Order.Status.CONFIRMED) or order.total < Decimal("1.00") or order.shipping_charge != 0:
+    if order.status != Order.Status.PENDING or order.total < Decimal("1.00") or order.shipping_charge != 0:
         return JsonResponse({"detail": "This order is not eligible for payment."}, status=400)
     try:
         payment, created = Payment.objects.get_or_create(order=order, defaults={"environment": settings.RAZORPAY_MODE})

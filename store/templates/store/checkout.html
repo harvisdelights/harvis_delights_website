@@ -6,7 +6,7 @@
   <section>
     <p class="eyebrow">CHECKOUT</p>
     <h1>Delivery details</h1>
-    <p class="checkout-intro">Orders are confirmed automatically. Payment is tracked separately. Delivery estimates begin from {{ seller_origin }}.</p>
+    <p class="checkout-intro">Payment is required to confirm your order. You will continue securely to Razorpay after reviewing your delivery details. Delivery estimates begin from {{ seller_origin }}.</p>
     <form method="post" id="checkout-form" class="checkout-form">
       {% csrf_token %}
       <input type="hidden" name="cart_payload" id="cart-payload">
@@ -16,8 +16,8 @@
       {% for field in form %}<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% if field.errors %}<small class="field-error">{{ field.errors|striptags }}</small>{% endif %}</div>{% endfor %}
       <button class="button" type="button" id="estimate-button">Check delivery estimate</button>
       <div class="estimate" id="estimate-result" aria-live="polite">Enter your pincode to check delivery availability.</div>
-      <div class="estimate"><strong>Payment options</strong><p><button type="button" onclick="document.getElementById('cod-message').hidden = false">Cash on delivery</button></p><p id="cod-message" hidden>Cash on delivery is not available yet.</p>{% if payment_enabled %}{% if payment_mode == 'live' %}<p>Continue to Razorpay to pay for your order.</p>{% else %}<p>Continue to Razorpay test payment. No real money is charged.</p>{% endif %}{% else %}<p>Online payment is not available yet. No payment will be collected.</p>{% endif %}</div>
-      <button class="button checkout-submit" type="submit" id="checkout-submit" disabled>{% if payment_enabled %}Place order and continue to payment{% else %}Place order{% endif %}</button>
+      <div class="estimate"><strong>Secure online payment</strong>{% if payment_enabled %}{% if payment_mode == 'live' %}<p>Continue to Razorpay to complete payment and confirm your order.</p>{% else %}<p>Continue to Razorpay test payment. No real money is charged.</p>{% endif %}{% else %}<p>Online payment is temporarily unavailable. You cannot place an order right now.</p>{% endif %}</div>
+      <button class="button checkout-submit" type="submit" id="checkout-submit" disabled>Continue to secure payment</button>
       <noscript>JavaScript is required to review your cart and place an order.</noscript>
     </form>
   </section>
@@ -29,6 +29,6 @@
     <p>Prices are checked again when you place the order. Delivery is free.</p>
   </aside>
 </main>
-<script>window.checkoutConfig = {reviewUrl: "{% url 'cart_review' %}", estimateUrl: "{% url 'shipping_estimate' %}"};</script>
+<script>window.checkoutConfig = {reviewUrl: "{% url 'cart_review' %}", estimateUrl: "{% url 'shipping_estimate' %}", paymentEnabled: {% if payment_enabled %}true{% else %}false{% endif %}};</script>
 <script src="{% static 'store/checkout.js' %}"></script>
 {% endblock %}
