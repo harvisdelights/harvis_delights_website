@@ -8,10 +8,11 @@ import logging
 import re
 import uuid
 from decimal import Decimal
+from pathlib import Path
 
 from django.core import signing
 from django.db import IntegrityError, transaction
-from django.http import HttpResponse, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
 from django.views.decorators.csrf import csrf_exempt
@@ -30,6 +31,28 @@ logger = logging.getLogger(__name__)
 
 def health(request):
     return HttpResponse("ok")
+
+
+def product_media(request, path):
+    """Serve product images from the Render persistent disk.
+
+    The application intentionally runs this route itself because product media
+    is stored on the service's mounted disk rather than in a separate object
+    storage service.  Resolve and validate the path so a media URL cannot read
+    a file outside MEDIA_ROOT.
+    """
+    media_root = Path(settings.MEDIA_ROOT).resolve()
+    requested_file = (media_root / path).resolve()
+    allowed_extensions = {".avif", ".gif", ".jpeg", ".jpg", ".png", ".webp"}
+
+    if media_root not in requested_file.parents or requested_file.suffix.lower() not in allowed_extensions:
+        raise Http404("Media file not found")
+    if not requested_file.is_file():
+        raise Http404("Media file not found")
+
+    response = FileResponse(requested_file.open("rb"))
+    response["Cache-Control"] = "public, max-age=86400"
+    return response
 
 def home(request):
     return render(request, "store/home.html", {"featured": Product.objects.filter(is_active=True, is_featured=True)[:6]})

@@ -1,6 +1,8 @@
 import json
+import tempfile
 import uuid
 from decimal import Decimal
+from pathlib import Path
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -8,6 +10,26 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from .models import Category, CustomerAddress, Order, OrderEmail, Product
+
+
+class ProductMediaTests(TestCase):
+    def test_product_image_is_served_from_media_root(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            image_path = Path(temporary_directory) / "products" / "almonds.jpg"
+            image_path.parent.mkdir()
+            image_path.write_bytes(b"image-content")
+
+            with self.settings(MEDIA_ROOT=temporary_directory):
+                response = self.client.get("/media/products/almonds.jpg")
+
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(b"".join(response.streaming_content), b"image-content")
+            self.assertEqual(response["Cache-Control"], "public, max-age=86400")
+
+    def test_media_route_rejects_path_traversal(self):
+        response = self.client.get("/media/../manage.py")
+
+        self.assertEqual(response.status_code, 404)
 
 
 @override_settings(STORAGES={"default": {"BACKEND": "django.core.files.storage.FileSystemStorage"}, "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"}})
