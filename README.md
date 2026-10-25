@@ -49,7 +49,21 @@ Before dispatching live Shiprocket orders, create the pickup location in Shiproc
 
 The included `render.yaml` creates a Django web service and managed PostgreSQL database. Render wires `DATABASE_URL` privately, runs migrations before each deploy, and stores product uploads on a 1 GB persistent disk mounted at `/var/data`. Production refuses to start without `DATABASE_URL`, ensuring it never falls back to SQLite.
 
-After applying the Blueprint, add your custom domain in the Render Dashboard and update `DJANGO_ALLOWED_HOSTS` plus `DJANGO_CSRF_TRUSTED_ORIGINS` with that domain. The generated `DJANGO_SECRET_KEY` is managed by Render. Keep one web instance while uploads use the local persistent disk; move media to object storage before horizontal scaling.
+### Move to `www.harvisdelights.com`
+
+The Blueprint declares `www.harvisdelights.com` as the primary custom domain. Render automatically adds `harvisdelights.com` and redirects it to `www` when the `www` custom domain is added. Existing Render services do not necessarily adopt Blueprint changes automatically, so set these same environment variables in the Render Dashboard before verifying the domain:
+
+```
+DJANGO_ALLOWED_HOSTS=.onrender.com,www.harvisdelights.com,harvisdelights.com
+DJANGO_CSRF_TRUSTED_ORIGINS=https://*.onrender.com,https://www.harvisdelights.com,https://harvisdelights.com
+PUBLIC_SITE_URL=https://www.harvisdelights.com
+```
+
+In Render, open the web service's **Settings → Custom Domains**, add `www.harvisdelights.com`, then configure the DNS provider records Render displays. For a standard DNS provider, point `www` with a CNAME to the service's exact `onrender.com` hostname. Render will also tell you how to point the apex domain; use an ALIAS/ANAME where supported, or Render's documented A record. Remove conflicting redirect, CNAME and AAAA records first. Verify the domain in Render and wait for its TLS certificate before changing customer-facing links or payment webhooks.
+
+After verification, update the Razorpay live webhook URL to `https://www.harvisdelights.com/payments/razorpay/webhook/`, retain the old webhook endpoint until a new live payment and refund event have been delivered successfully, then remove it. Update the ZeptoMail verified sender/domain and any external OAuth or shipping callback URLs separately if applicable. Do not disable the Render subdomain until the custom domain, password reset, checkout, payment webhook and admin access checks all pass.
+
+The generated `DJANGO_SECRET_KEY` is managed by Render. Keep one web instance while uploads use the local persistent disk; move media to object storage before horizontal scaling.
 
 ### Temporary free-tier admin bootstrap
 
