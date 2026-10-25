@@ -1,4 +1,5 @@
 from decimal import Decimal
+from io import StringIO
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
@@ -7,6 +8,7 @@ from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.mail import EmailMessage
+from django.core.management import CommandError, call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
@@ -33,6 +35,18 @@ class EmailIntegrationTests(TestCase):
         self.assertEqual(post.call_args.kwargs["headers"]["Authorization"], "Zoho-enczapikey test-key")
         self.assertEqual(post.call_args.kwargs["json"]["to"][0]["email_address"]["address"], "buyer@example.com")
         self.assertFalse(post.call_args.kwargs["allow_redirects"])
+
+    @override_settings(ZEPTOMAIL_API_URL="https://cpaas.zoho.in/v1.1/email")
+    @patch("store.services.zeptomail.requests.post")
+    def test_cpaas_india_send_endpoint_is_allowed(self, post):
+        post.return_value = Mock(status_code=201)
+
+        sent = ZeptoMailBackend().send_messages([
+            EmailMessage("Subject", "Hello", "hdcare@harvisdelights.com", ["buyer@example.com"])
+        ])
+
+        self.assertEqual(sent, 1)
+        self.assertEqual(post.call_args.args[0], "https://cpaas.zoho.in/v1.1/email")
 
     @override_settings(ZEPTOMAIL_API_URL="https://evil.example/v1.1/email")
     @patch("store.services.zeptomail.requests.post")
@@ -92,3 +106,17 @@ class EmailIntegrationTests(TestCase):
     @override_settings(ZEPTOMAIL_API_KEY="")
     def test_password_recovery_is_disabled_without_provider(self):
         self.assertContains(self.client.get(reverse("password_recovery")), "being set up")
+
+    @patch("store.management.commands.send_test_email.send_mail", return_value=1)
+    def test_send_test_email_command_uses_explicit_recipient(self, send_mail):
+        output = StringIO()
+
+        call_command("send_test_email", "--to", "owner@example.com", stdout=output)
+
+        self.assertIn("accepted one test email", output.getvalue())
+        self.assertEqual(send_mail.call_args.args[3], ["owner@example.com"])
+
+    @override_settings(ZEPTOMAIL_API_KEY="")
+    def test_send_test_email_command_requires_provider_configuration(self):
+        with self.assertRaises(CommandError):
+            call_command("send_test_email", "--to", "owner@example.com")

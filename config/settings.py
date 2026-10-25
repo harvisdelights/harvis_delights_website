@@ -78,6 +78,9 @@ ZEPTOMAIL_API_URL = os.environ.get("ZEPTOMAIL_API_URL", "").strip()
 ZEPTOMAIL_API_KEY = os.environ.get("ZEPTOMAIL_API_KEY", "").strip()
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "hdcare@harvisdelights.com")
 SELLER_NOTIFICATION_EMAIL = os.environ.get("SELLER_NOTIFICATION_EMAIL", "hdcare@harvisdelights.com")
+# This address is shown to customers in order-status emails. Keep it separate
+# from the internal recipient for seller notifications.
+CUSTOMER_SUPPORT_EMAIL = os.environ.get("CUSTOMER_SUPPORT_EMAIL", "hdcare@harvisdelights.com")
 PUBLIC_SITE_URL = os.environ.get("PUBLIC_SITE_URL", "").rstrip("/")
 EMAIL_BACKEND = "store.services.zeptomail.ZeptoMailBackend"
 PASSWORD_RESET_TIMEOUT = 3600

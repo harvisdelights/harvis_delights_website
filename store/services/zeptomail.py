@@ -20,7 +20,13 @@ class ZeptoMailBackend(BaseEmailBackend):
             if not email_configured():
                 raise ValueError("ZeptoMail is not configured")
             url = urlsplit(settings.ZEPTOMAIL_API_URL)
-            allowed_hosts = {"api.zeptomail.com", "api.zeptomail.in", "zeptomail.zoho.com", "zeptomail.zoho.in"}
+            # Use the endpoint displayed by the selected ZeptoMail/CPaaS
+            # agent. Accounts in the India data centre use cpaas.zoho.in.
+            allowed_hosts = {
+                "api.zeptomail.com", "api.zeptomail.in",
+                "zeptomail.zoho.com", "zeptomail.zoho.in",
+                "cpaas.zoho.com", "cpaas.zoho.in",
+            }
             if url.scheme != "https" or url.hostname not in allowed_hosts or url.path != "/v1.1/email" or url.query or url.fragment or url.username or url.password or url.port not in (None, 443):
                 raise ValueError("Invalid ZeptoMail API URL")
             key = settings.ZEPTOMAIL_API_KEY

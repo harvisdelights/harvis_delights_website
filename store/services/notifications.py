@@ -46,4 +46,4 @@ def queue_order_status_email(order):
     if order.status not in ("confirmed", "shipped", "cancelled"):
         return
     label = order.get_status_display()
-    queue_order_email(order, order.user.email, f"Order {order.number}: {label}", f"Your order {order.number} is now marked {label}. Contact {settings.SELLER_NOTIFICATION_EMAIL} if you have questions.\n\nHarvi's Delights")
+    queue_order_email(order, order.user.email, f"Order {order.number}: {label}", f"Your order {order.number} is now marked {label}. Contact {settings.CUSTOMER_SUPPORT_EMAIL} if you have questions.\n\nHarvi's Delights")
