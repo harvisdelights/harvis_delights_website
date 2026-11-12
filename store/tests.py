@@ -51,13 +51,13 @@ class ProductGalleryTests(TestCase):
             position=1,
         )
 
-    def test_product_detail_renders_selectable_gallery_and_viewer(self):
+    def test_product_detail_renders_selectable_gallery_below_purchase_controls(self):
         response = self.client.get(self.product.get_absolute_url())
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "data-product-gallery")
         self.assertContains(response, "data-gallery-image")
-        self.assertContains(response, "data-gallery-lightbox")
+        self.assertContains(response, "product-gallery-thumbnails")
         self.assertContains(response, "products/gallery/almonds-side.jpg")
 
 

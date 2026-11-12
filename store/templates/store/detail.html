@@ -4,7 +4,7 @@
 {% block content %}<link rel="stylesheet" href="{% static 'store/gallery.css' %}"><style>.product-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}.product-actions .button{margin:0}.marketplace{display:inline-block;padding:13px 16px;color:#fff;font-size:13px;font-weight:bold}.flipkart{background:#2874f0}.meesho{background:#9f2089}</style>
 <main class="detail">
   <section class="product-gallery" data-product-gallery aria-label="{{ product.name }} photos">
-    <button class="detail-image gallery-main" type="button" data-gallery-open aria-label="Open larger image of {{ product.name }}">
+    <div class="detail-image gallery-main">
       {% if product.image %}
         <img src="{{ product.image.url }}" alt="{{ product.name }}" data-gallery-main>
       {% elif product.gallery.all %}
@@ -12,51 +12,37 @@
       {% else %}
         <span>{{ product.name|slice:':1' }}</span>
       {% endif %}
-    </button>
-    {% if product.image or product.gallery.all %}
-      <div class="gallery" aria-label="Choose a product image">
-        {% if product.image %}
-          <button class="gallery-thumb is-selected" type="button" data-gallery-image="{{ product.image.url }}" data-gallery-alt="{{ product.name }}" aria-label="Show primary image" aria-pressed="true"><img src="{{ product.image.url }}" alt=""></button>
-        {% endif %}
-        {% for photo in product.gallery.all %}
-          <button class="gallery-thumb{% if not product.image and forloop.first %} is-selected{% endif %}" type="button" data-gallery-image="{{ photo.image.url }}" data-gallery-alt="{{ photo.alt_text|default:product.name }}" aria-label="Show image {{ forloop.counter }}" aria-pressed="{% if not product.image and forloop.first %}true{% else %}false{% endif %}"><img src="{{ photo.image.url }}" alt=""></button>
-        {% endfor %}
-      </div>
-    {% endif %}
+    </div>
   </section>
   <div><a class="back" href="{% url 'products' %}">&larr; Back to shop</a><p class="eyebrow">{{ product.category.name }} {% if product.weight %}&middot; {{ product.weight }}{% endif %}</p><h1>{{ product.name }}</h1><strong class="detail-price">&#8377;{{ product.price }}</strong><p>{{ product.description }}</p>
-  <div class="product-actions"><button class="button" data-add data-id="{{ product.id }}" data-name="{{ product.name }}" data-price="{{ product.price }}" {% if product.image %}data-image="{{ product.image.url }}"{% endif %}>Add to cart</button>{% if product.flipkart_url %}<a class="marketplace flipkart" href="{{ product.flipkart_url }}" target="_blank" rel="noopener">Buy on Flipkart</a>{% endif %}{% if product.meesho_url %}<a class="marketplace meesho" href="{{ product.meesho_url }}" target="_blank" rel="noopener">Buy on Meesho</a>{% endif %}</div><p class="note">Add this item to your cart, then continue to checkout to place an order request.</p></div>
+  <div class="product-actions"><button class="button" data-add data-id="{{ product.id }}" data-name="{{ product.name }}" data-price="{{ product.price }}" {% if product.image %}data-image="{{ product.image.url }}"{% endif %}>Add to cart</button>{% if product.flipkart_url %}<a class="marketplace flipkart" href="{{ product.flipkart_url }}" target="_blank" rel="noopener">Buy on Flipkart</a>{% endif %}{% if product.meesho_url %}<a class="marketplace meesho" href="{{ product.meesho_url }}" target="_blank" rel="noopener">Buy on Meesho</a>{% endif %}</div>
+  {% if product.image or product.gallery.all %}
+    <div class="gallery product-gallery-thumbnails" aria-label="Choose a product image">
+      {% if product.image %}
+        <button class="gallery-thumb is-selected" type="button" data-gallery-image="{{ product.image.url }}" data-gallery-alt="{{ product.name }}" aria-label="Show primary image" aria-pressed="true"><img src="{{ product.image.url }}" alt=""></button>
+      {% endif %}
+      {% for photo in product.gallery.all %}
+        <button class="gallery-thumb{% if not product.image and forloop.first %} is-selected{% endif %}" type="button" data-gallery-image="{{ photo.image.url }}" data-gallery-alt="{{ photo.alt_text|default:product.name }}" aria-label="Show image {{ forloop.counter }}" aria-pressed="{% if not product.image and forloop.first %}true{% else %}false{% endif %}"><img src="{{ photo.image.url }}" alt=""></button>
+      {% endfor %}
+    </div>
+  {% endif %}
+  <p class="note">Add this item to your cart, then continue to checkout to place an order request.</p></div>
 </main>
-<dialog class="gallery-lightbox" data-gallery-lightbox aria-label="Product image viewer">
-  <button class="gallery-lightbox-close" type="button" data-gallery-close aria-label="Close image viewer">&times;</button>
-  <img src="" alt="" data-gallery-lightbox-image>
-</dialog>
 <script>
   (() => {
-    const gallery = document.querySelector('[data-product-gallery]');
-    if (!gallery) return;
-    const mainImage = gallery.querySelector('[data-gallery-main]');
-    const lightbox = document.querySelector('[data-gallery-lightbox]');
-    const lightboxImage = lightbox?.querySelector('[data-gallery-lightbox-image]');
+    const mainImage = document.querySelector('[data-gallery-main]');
+    const thumbnails = document.querySelectorAll('[data-gallery-image]');
     const selectImage = (button) => {
       if (!mainImage || !button) return;
       mainImage.src = button.dataset.galleryImage;
       mainImage.alt = button.dataset.galleryAlt;
-      gallery.querySelectorAll('[data-gallery-image]').forEach((thumbnail) => {
+      thumbnails.forEach((thumbnail) => {
         const selected = thumbnail === button;
         thumbnail.classList.toggle('is-selected', selected);
         thumbnail.setAttribute('aria-pressed', String(selected));
       });
     };
-    gallery.querySelectorAll('[data-gallery-image]').forEach((button) => button.addEventListener('click', () => selectImage(button)));
-    gallery.querySelector('[data-gallery-open]')?.addEventListener('click', () => {
-      if (!mainImage || !lightbox || !lightboxImage) return;
-      lightboxImage.src = mainImage.src;
-      lightboxImage.alt = mainImage.alt;
-      lightbox.showModal();
-    });
-    lightbox?.querySelector('[data-gallery-close]')?.addEventListener('click', () => lightbox.close());
-    lightbox?.addEventListener('click', (event) => { if (event.target === lightbox) lightbox.close(); });
+    thumbnails.forEach((button) => button.addEventListener('click', () => selectImage(button)));
   })();
 </script>
 {% endblock %}
