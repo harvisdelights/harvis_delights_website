@@ -59,7 +59,12 @@ def home(request):
 def products(request):
     return render(request, "store/products.html", {"products": Product.objects.filter(is_active=True), "categories": Category.objects.all()})
 def product_detail(request, slug):
-    return render(request, "store/detail.html", {"product": get_object_or_404(Product, slug=slug, is_active=True)})
+    product = get_object_or_404(
+        Product.objects.select_related("category").prefetch_related("gallery"),
+        slug=slug,
+        is_active=True,
+    )
+    return render(request, "store/detail.html", {"product": product})
 
 def signup(request):
     if request.user.is_authenticated:

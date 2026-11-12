@@ -9,7 +9,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from .models import Category, CustomerAddress, Order, OrderEmail, Product
+from .models import Category, CustomerAddress, Order, OrderEmail, Product, ProductImage
 
 
 class ProductMediaTests(TestCase):
@@ -30,6 +30,35 @@ class ProductMediaTests(TestCase):
         response = self.client.get("/media/../manage.py")
 
         self.assertEqual(response.status_code, 404)
+
+
+class ProductGalleryTests(TestCase):
+    def setUp(self):
+        category = Category.objects.create(name="Nuts", slug="nuts")
+        self.product = Product.objects.create(
+            category=category,
+            name="Almonds",
+            slug="almonds",
+            short_description="Crunchy almonds",
+            description="Freshly packed almonds.",
+            price=Decimal("100.00"),
+            image="products/almonds-primary.jpg",
+        )
+        ProductImage.objects.create(
+            product=self.product,
+            image="products/gallery/almonds-side.jpg",
+            alt_text="Side view of almonds",
+            position=1,
+        )
+
+    def test_product_detail_renders_selectable_gallery_and_viewer(self):
+        response = self.client.get(self.product.get_absolute_url())
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "data-product-gallery")
+        self.assertContains(response, "data-gallery-image")
+        self.assertContains(response, "data-gallery-lightbox")
+        self.assertContains(response, "products/gallery/almonds-side.jpg")
 
 
 @override_settings(
