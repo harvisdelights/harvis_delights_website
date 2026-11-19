@@ -59,6 +59,8 @@ Active: enabled
 
 This gives a meaningful but bounded incentive: a ₹499 cart receives ₹49.90 off, while larger carts never receive more than ₹100 off. Do not manually add or delete **Coupon redemptions**; they are created only after the corresponding payment has been captured and verified. Existing pending orders keep their recorded total, while a changed, expired, or already-used coupon must be reviewed again before a new order can be placed.
 
+To advertise an offer, set **Show on storefront** for exactly the coupon you want displayed, optionally enter a **Storefront message** such as `Welcome offer for new customers`, and set its priority. Only one active public coupon is displayed. Guests see an active public promotion; signed-in customers who have already redeemed it, or who already have a paid order when it is first-order-only, do not. The banner copies the code but does not apply a discount until checkout validates it again.
+
 Pre-existing orders are labelled "Legacy / unverified". Live checkout rejects legacy and test orders. Admin fulfillment transitions for live orders require a captured live payment; staff must still check for refunds and disputes in Razorpay immediately before dispatch, especially if webhook delivery is delayed or unavailable.
 
 The checkout estimate starts from **Harvi's Delights, Nizampet, 500090**. Add either `SHIPROCKET_API_TOKEN` or both `SHIPROCKET_EMAIL` and `SHIPROCKET_PASSWORD` as secret Render environment variables to enable Shiprocket serviceability and estimated delivery times. Without those credentials, checkout continues to work and displays a standard 4-7 business-day estimate. This integration is read-only: it does not create Shiprocket shipments, charges, or pickup locations.

@@ -35,8 +35,8 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Coupon)
 class CouponAdmin(admin.ModelAdmin):
-    list_display = ("code", "discount_type", "discount_value", "maximum_discount", "minimum_order_value", "first_paid_order_only", "is_active", "starts_at", "expires_at")
-    list_filter = ("is_active", "first_paid_order_only", "discount_type")
+    list_display = ("code", "discount_type", "discount_value", "maximum_discount", "minimum_order_value", "first_paid_order_only", "show_on_storefront", "is_active", "starts_at", "expires_at")
+    list_filter = ("is_active", "show_on_storefront", "first_paid_order_only", "discount_type")
     search_fields = ("code",)
     readonly_fields = ("created_at", "updated_at")
 

@@ -32,7 +32,7 @@ MIDDLEWARE = [
 ]
 ROOT_URLCONF = "config.urls"
 TEMPLATES = [{"BACKEND": "django.template.backends.django.DjangoTemplates", "DIRS": [], "APP_DIRS": True,
-              "OPTIONS": {"context_processors": ["django.template.context_processors.request", "django.contrib.auth.context_processors.auth", "django.contrib.messages.context_processors.messages"]}}]
+              "OPTIONS": {"context_processors": ["django.template.context_processors.request", "django.contrib.auth.context_processors.auth", "django.contrib.messages.context_processors.messages", "store.context_processors.storefront_coupon"]}}]
 WSGI_APPLICATION = "config.wsgi.application"
 # Local development uses SQLite. Render supplies DATABASE_URL for managed PostgreSQL.
 # DATA_DIR is used only for user-uploaded media in production.

@@ -206,6 +206,23 @@ class CheckoutTests(TestCase):
         self.assertTrue(response.json()["coupon_error"])
         self.assertIn("first successfully paid order", response.json()["detail"])
 
+    def test_active_public_coupon_is_shown_to_a_new_customer_only(self):
+        coupon = Coupon.objects.create(
+            code="WELCOME10",
+            discount_value=Decimal("10.00"),
+            first_paid_order_only=True,
+            show_on_storefront=True,
+            storefront_message="Welcome to Harvi's Delights",
+        )
+        response = self.client.get(reverse("home"))
+        self.assertContains(response, "Welcome to Harvi's Delights")
+        self.assertContains(response, "WELCOME10")
+
+        prior = Order.objects.create(user=self.user, subtotal=Decimal("10.00"), total=Decimal("10.00"))
+        Payment.objects.create(order=prior, status=Payment.Status.PAID)
+        response = self.client.get(reverse("home"))
+        self.assertNotContains(response, coupon.code)
+
     def test_unavailable_items_are_not_silently_omitted(self):
         cart = self.cart + [{"id": 999999, "quantity": 1, "name": "Missing"}]
         response = self.review(cart)
