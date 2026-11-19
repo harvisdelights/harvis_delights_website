@@ -6,6 +6,11 @@
   const submit = document.querySelector('#checkout-submit');
   const items = document.querySelector('#checkout-items');
   const total = document.querySelector('#checkout-total');
+  const subtotal = document.querySelector('#checkout-subtotal');
+  const discountRow = document.querySelector('#checkout-discount');
+  const discountValue = document.querySelector('#checkout-discount-value');
+  const couponCode = document.querySelector('#coupon-code');
+  const couponMessage = document.querySelector('#coupon-message');
   const message = document.querySelector('#cart-review-message');
   const estimate = document.querySelector('#estimate-result');
   const csrf = form.querySelector('[name=csrfmiddlewaretoken]').value;
@@ -27,6 +32,9 @@
     try { cart = JSON.parse(raw); } catch (_) { cart = []; }
     items.replaceChildren();
     total.textContent = money(0);
+    subtotal.textContent = money(0);
+    discountRow.hidden = true;
+    couponMessage.textContent = 'Have a coupon? Apply it before continuing to payment.';
     if (!Array.isArray(cart) || !cart.length) {
       message.textContent = 'Your cart is empty or invalid. Please return to the shop.';
       return;
@@ -34,6 +42,7 @@
     message.textContent = 'Checking current products and prices...';
     const data = new FormData();
     data.append('cart_payload', raw);
+    data.append('coupon_code', couponCode.value);
     try {
       const response = await fetch(window.checkoutConfig.reviewUrl, {method: 'POST', headers: {'X-CSRFToken': csrf}, body: data});
       const result = await response.json();
@@ -43,7 +52,8 @@
           const item = cart.find(entry => String(entry.id) === String(id));
           return item ? item.name : `Product ${id}`;
         });
-        message.textContent = result.detail + (unavailable.length ? ` Unavailable: ${unavailable.join(', ')}. Open your cart to remove them.` : '');
+        if (result.coupon_error) couponMessage.textContent = result.detail;
+        else message.textContent = result.detail + (unavailable.length ? ` Unavailable: ${unavailable.join(', ')}. Open your cart to remove them.` : '');
         return;
       }
       const idField = document.querySelector('#checkout-id');
@@ -60,6 +70,12 @@
         items.append(row);
       }
       total.textContent = money(result.total);
+      subtotal.textContent = money(result.subtotal);
+      if (Number(result.discount) > 0) {
+        discountRow.hidden = false;
+        discountValue.textContent = `-${money(result.discount)}`;
+        couponMessage.textContent = `${result.coupon} applied successfully.`;
+      }
       const changed = result.items.some(item => {
         const previous = cart.find(entry => String(entry.id) === String(item.id));
         return !previous || Number(previous.price) !== Number(item.price);
@@ -88,6 +104,11 @@
       const result = await response.json();
       estimate.textContent = result.message || result.detail || 'Unable to check delivery at the moment.';
     } catch (_) { estimate.textContent = 'Unable to check delivery at the moment.'; }
+  });
+
+  document.querySelector('#coupon-apply').addEventListener('click', reviewCart);
+  couponCode.addEventListener('keydown', event => {
+    if (event.key === 'Enter') { event.preventDefault(); reviewCart(); }
   });
 
   form.addEventListener('submit', event => {

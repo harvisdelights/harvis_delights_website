@@ -9,7 +9,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from .models import Order, OrderEmail, Payment
+from .models import Coupon, CouponRedemption, Order, OrderEmail, Payment
 from .services import payments
 from .admin import OrderAdminForm
 from django.core.exceptions import ValidationError
@@ -101,6 +101,22 @@ class PaymentTests(TestCase):
         receipts = OrderEmail.objects.filter(deduplication_key__startswith=f"payment-captured:{payment.pk}:")
         self.assertEqual(receipts.count(), 2)
         self.assertCountEqual(receipts.values_list("recipient", flat=True), [self.user.email, "hdcare@harvisdelights.com"])
+
+    def test_capture_records_a_coupon_redemption_only_after_payment_is_verified(self):
+        coupon = Coupon.objects.create(code="WELCOME10", discount_value=Decimal("10.00"), first_paid_order_only=True)
+        self.order.coupon = coupon
+        self.order.coupon_code = coupon.code
+        self.order.discount_total = Decimal("10.00")
+        self.order.total = Decimal("539.00")
+        self.order.save(update_fields=["coupon", "coupon_code", "discount_total", "total"])
+        entity = {**self.entity, "amount": 53900}
+        Payment.objects.create(order=self.order, gateway_order_id="order_123", status=Payment.Status.PENDING)
+
+        self.assertEqual(CouponRedemption.objects.count(), 0)
+        self.assertTrue(payments.record_capture("order_123", entity))
+        redemption = CouponRedemption.objects.get()
+        self.assertEqual(redemption.coupon, coupon)
+        self.assertEqual(redemption.order, self.order)
 
     @patch("store.services.payments.request_api")
     def test_reconcile_recovers_only_matching_unrefunded_capture(self, api):

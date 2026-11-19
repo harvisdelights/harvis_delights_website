@@ -41,6 +41,24 @@ If gateway order creation times out, the record is marked for manual review and 
 
 Existing payment records are marked "Legacy / unverified" because their original environment cannot be established safely from the database alone. New payments are labelled with their configured environment.
 
+### Coupons
+
+Coupons are created and controlled in `/admin/` under **Coupons**. A coupon is never trusted from browser JavaScript: checkout recalculates the product subtotal, validates the code for the signed-in customer, signs the selected coupon and discount into the checkout quote, saves the discount snapshot on the order, and creates the Razorpay order for the reduced `Order.total`. At verified payment capture, a redemption audit record is created. A repeated callback is idempotent. If two eligible first-order payments capture concurrently, the second is put into **Needs manual review** and must not be fulfilled until it is investigated in Razorpay.
+
+Recommended first-buyer launch coupon:
+
+```
+Code: WELCOME10
+Discount type: Percentage
+Discount value: 10
+Maximum discount: 100
+Minimum order value: 499
+First paid order only: enabled
+Active: enabled
+```
+
+This gives a meaningful but bounded incentive: a ₹499 cart receives ₹49.90 off, while larger carts never receive more than ₹100 off. Do not manually add or delete **Coupon redemptions**; they are created only after the corresponding payment has been captured and verified. Existing pending orders keep their recorded total, while a changed, expired, or already-used coupon must be reviewed again before a new order can be placed.
+
 Pre-existing orders are labelled "Legacy / unverified". Live checkout rejects legacy and test orders. Admin fulfillment transitions for live orders require a captured live payment; staff must still check for refunds and disputes in Razorpay immediately before dispatch, especially if webhook delivery is delayed or unavailable.
 
 The checkout estimate starts from **Harvi's Delights, Nizampet, 500090**. Add either `SHIPROCKET_API_TOKEN` or both `SHIPROCKET_EMAIL` and `SHIPROCKET_PASSWORD` as secret Render environment variables to enable Shiprocket serviceability and estimated delivery times. Without those credentials, checkout continues to work and displays a standard 4-7 business-day estimate. This integration is read-only: it does not create Shiprocket shipments, charges, or pickup locations.

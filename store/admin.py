@@ -5,7 +5,7 @@ from django.db import IntegrityError, transaction
 from django.utils.html import format_html_join
 import requests
 from .services import payments
-from .models import Category, CustomerAddress, Order, OrderEmail, OrderItem, Payment, Product, ProductImage, ProductReview
+from .models import Category, Coupon, CouponRedemption, CustomerAddress, Order, OrderEmail, OrderItem, Payment, Product, ProductImage, ProductReview
 from .services.notifications import deliver_order_email, queue_order_status_email
 
 class ProductImageInline(admin.TabularInline):
@@ -31,6 +31,27 @@ class ProductAdmin(admin.ModelAdmin):
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
     prepopulated_fields = {"slug": ("name",)}
+
+
+@admin.register(Coupon)
+class CouponAdmin(admin.ModelAdmin):
+    list_display = ("code", "discount_type", "discount_value", "maximum_discount", "minimum_order_value", "first_paid_order_only", "is_active", "starts_at", "expires_at")
+    list_filter = ("is_active", "first_paid_order_only", "discount_type")
+    search_fields = ("code",)
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(CouponRedemption)
+class CouponRedemptionAdmin(admin.ModelAdmin):
+    list_display = ("coupon", "user", "order", "created_at")
+    search_fields = ("coupon__code", "user__email", "order__number")
+    readonly_fields = ("coupon", "user", "order", "created_at")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(ProductReview)
@@ -71,7 +92,7 @@ class OrderAdmin(admin.ModelAdmin):
     list_display = ("number", "user", "environment", "status", "payment_status", "total", "delivery_estimate", "created_at")
     list_filter = ("environment", "status")
     search_fields = ("number", "user__email", "user__first_name")
-    readonly_fields = ("number", "checkout_id", "user", "environment", "address", "shipping_address", "subtotal", "shipping_charge", "total", "delivery_estimate", "shiprocket_courier", "created_at", "updated_at")
+    readonly_fields = ("number", "checkout_id", "user", "environment", "address", "shipping_address", "subtotal", "coupon", "coupon_code", "discount_total", "shipping_charge", "total", "delivery_estimate", "shiprocket_courier", "created_at", "updated_at")
     inlines = [OrderItemInline]
 
     @admin.display(description="Online payment")

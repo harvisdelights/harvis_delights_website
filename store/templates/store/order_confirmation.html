@@ -2,6 +2,7 @@
 {% load static %}
 {% block title %}Your order | Harvi's Delights{% endblock %}
 {% block content %}
+<link rel="stylesheet" href="{% static 'store/coupons.css' %}">
 <link rel="stylesheet" href="{% static 'store/reviews.css' %}">
 <main class="confirmation-page"><section class="confirmation-card">
   <p class="eyebrow">ORDER RECEIVED</p>
@@ -32,6 +33,8 @@
     <p class="review-complete">You have already reviewed this product from this order.</p>
   {% endif %}
   {% endfor %}
+  <div class="summary-total"><span>Items subtotal</span><strong>&#8377;{{ order.subtotal }}</strong></div>
+  {% if order.discount_total %}<div class="summary-discount"><span>Coupon {{ order.coupon_code }}</span><strong>-&#8377;{{ order.discount_total }}</strong></div>{% endif %}
   <div class="summary-total"><span>Total (free delivery)</span><strong>&#8377;{{ order.total }}</strong></div>
   {% if order.payment.status == 'paid' %}{% if order.payment.environment == 'live' %}<p><strong>Payment captured.</strong></p>{% elif order.payment.environment == 'test' %}<p><strong>Test payment captured.</strong> No real money was charged.</p>{% else %}<p><strong>Historical payment captured.</strong> Contact the seller to verify its environment.</p>{% endif %}
   {% elif order.payment.status == 'review' %}<p>Payment requires review. Please contact the seller before retrying.</p>

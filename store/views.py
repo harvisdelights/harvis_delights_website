@@ -29,6 +29,7 @@ from .services.shipping import SELLER_AREA, SELLER_NAME, SELLER_PINCODE, deliver
 from .services.notifications import queue_new_order_emails
 from .services.zeptomail import email_configured
 from .services import payments
+from .services import coupons
 
 logger = logging.getLogger(__name__)
 
@@ -208,6 +209,20 @@ def _quote_lines(products, quantities):
     return [{"id": product.id, "quantity": quantities[product.id], "price": str(product.price)} for product in products]
 
 
+def _coupon_snapshot(coupon, discount):
+    return {
+        "id": coupon.pk if coupon else None,
+        "code": coupon.code if coupon else "",
+        "discount_total": str(discount),
+    }
+
+
+def _checkout_pricing(products, quantities, user, coupon_code):
+    subtotal = sum((product.price * quantities[product.id] for product in products), Decimal("0"))
+    coupon, discount = coupons.validate_coupon_for_checkout(code=coupon_code, user=user, subtotal=subtotal)
+    return subtotal, coupon, discount, subtotal - discount
+
+
 @login_required
 def cart_review(request):
     if request.method != "POST":
@@ -219,13 +234,17 @@ def cart_review(request):
     products, missing = _cart_products(quantities)
     if missing:
         return JsonResponse({"detail": "Some products are no longer available. Remove them from your cart before placing your order.", "unavailable_ids": missing}, status=409)
+    try:
+        subtotal, coupon, discount, total = _checkout_pricing(products, quantities, request.user, request.POST.get("coupon_code", ""))
+    except coupons.CouponError as exc:
+        return JsonResponse({"detail": str(exc), "coupon_error": True}, status=400)
     lines = _quote_lines(products, quantities)
     items = [{"id": product.id, "name": product.name, "quantity": quantities[product.id], "price": str(product.price), "line_total": str(product.price * quantities[product.id])} for product in products]
-    total = sum((product.price * quantities[product.id] for product in products), Decimal("0"))
-    if total > Decimal("99999999.99"):
+    if subtotal > Decimal("99999999.99"):
         return JsonResponse({"detail": "Your order total exceeds the supported limit. Please reduce your cart."}, status=400)
-    quote = signing.dumps({"user": request.user.pk, "lines": lines}, salt="store.checkout.quote", compress=True)
-    return JsonResponse({"items": items, "total": str(total), "quote": quote, "checkout_id": str(uuid.uuid4())})
+    coupon_data = _coupon_snapshot(coupon, discount)
+    quote = signing.dumps({"user": request.user.pk, "lines": lines, "coupon": coupon_data}, salt="store.checkout.quote", compress=True)
+    return JsonResponse({"items": items, "subtotal": str(subtotal), "discount": str(discount), "coupon": coupon_data["code"], "total": str(total), "quote": quote, "checkout_id": str(uuid.uuid4())})
 
 @login_required
 def shipping_estimate(request):
@@ -273,19 +292,28 @@ def checkout(request):
             else:
                 if form.is_valid():
                     products, missing = _cart_products(quantities)
-                    if missing or quote.get("lines") != _quote_lines(products, quantities):
+                    try:
+                        subtotal, coupon, discount, total = _checkout_pricing(products, quantities, request.user, quote.get("coupon", {}).get("code", ""))
+                    except (coupons.CouponError, AttributeError) as exc:
+                        form.add_error(None, str(exc))
+                        subtotal = coupon = discount = total = None
+                    if subtotal is None:
+                        pass
+                    elif (missing or quote.get("lines") != _quote_lines(products, quantities)
+                            or quote.get("coupon") != _coupon_snapshot(coupon, discount)):
                         form.add_error(None, "Your cart or prices changed. Please review the current items and total before ordering.")
                     else:
-                        subtotal = sum((p.price * quantities[p.id] for p in products), Decimal("0"))
                         weight = sum((p.shipping_weight_kg * quantities[p.id] for p in products), Decimal("0"))
                         estimate = delivery_estimate(form.cleaned_data["pincode"], weight, subtotal)
                         try:
                             with transaction.atomic():
                                 products, missing = _cart_products(quantities, lock=True)
-                                if missing or quote.get("lines") != _quote_lines(products, quantities):
+                                subtotal, coupon, discount, total = _checkout_pricing(products, quantities, request.user, quote.get("coupon", {}).get("code", ""))
+                                if (missing or quote.get("lines") != _quote_lines(products, quantities)
+                                        or quote.get("coupon") != _coupon_snapshot(coupon, discount)):
                                     raise ValueError("Your cart or prices changed. Please review the current items and total before ordering.")
                                 address = CustomerAddress.objects.create(user=request.user, **{key: form.cleaned_data[key] for key in ("full_name", "phone", "line1", "line2", "city", "state", "pincode")})
-                                order = Order.objects.create(checkout_id=checkout_id, user=request.user, address=address, environment=settings.RAZORPAY_MODE if settings.RAZORPAY_MODE in ("test", "live") else Order.Environment.LEGACY, status=Order.Status.PENDING, subtotal=subtotal, total=subtotal, delivery_estimate=estimate["message"], shiprocket_courier=estimate["courier"])
+                                order = Order.objects.create(checkout_id=checkout_id, user=request.user, address=address, environment=settings.RAZORPAY_MODE if settings.RAZORPAY_MODE in ("test", "live") else Order.Environment.LEGACY, status=Order.Status.PENDING, subtotal=subtotal, coupon=coupon, coupon_code=coupon.code if coupon else "", discount_total=discount, total=total, delivery_estimate=estimate["message"], shiprocket_courier=estimate["courier"])
                                 OrderItem.objects.bulk_create([OrderItem(order=order, product=p, product_name=p.name, unit_price=p.price, quantity=quantities[p.id]) for p in products])
                                 queue_new_order_emails(order)
                         except ValueError as exc:

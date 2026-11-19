@@ -45,7 +45,8 @@ def queue_order_email(order, recipient, subject, body, *, deduplication_key=None
 
 def queue_new_order_emails(order):
     lines = "\n".join(f"- {item.product_name} x {item.quantity}: INR {item.unit_price} each" for item in order.items.all())
-    body = f"Order reference: {order.number}\nOrder status: {order.get_status_display()}\nPayment status: Not paid at time of order creation\n\n{lines}\n\nItems subtotal: INR {order.total}\nDelivery is free. Check the order page for the latest payment status.\n\nHarvi's Delights"
+    discount = f"\nCoupon {order.coupon_code}: -INR {order.discount_total}" if order.discount_total else ""
+    body = f"Order reference: {order.number}\nOrder status: {order.get_status_display()}\nPayment status: Not paid at time of order creation\n\n{lines}\n\nItems subtotal: INR {order.subtotal}{discount}\nAmount to pay: INR {order.total}\nDelivery is free. Check the order page for the latest payment status.\n\nHarvi's Delights"
     queue_order_email(order, order.user.email, f"Order received - {order.number}", f"Thank you. Your order has been received; payment is separate.\n\n{body}")
     queue_order_email(order, settings.SELLER_NOTIFICATION_EMAIL, f"New order - {order.number}", f"A customer placed an order. Verify payment status before dispatch.\n\n{body}")
 
@@ -72,7 +73,8 @@ def queue_payment_captured_emails(payment_id):
         customer_intro = "Your test payment has been captured. No real money was charged."
         seller_intro = "A test payment has been captured. No real money was charged."
 
-    details = f"Order reference: {order.number}\nPayment status: Captured\nAmount paid: INR {order.total}\n\n{lines}\n\nHarvi's Delights"
+    discount = f"\nCoupon {order.coupon_code}: -INR {order.discount_total}" if order.discount_total else ""
+    details = f"Order reference: {order.number}\nPayment status: Captured\nItems subtotal: INR {order.subtotal}{discount}\nAmount paid: INR {order.total}\n\n{lines}\n\nHarvi's Delights"
     queue_order_email(
         order,
         order.user.email,

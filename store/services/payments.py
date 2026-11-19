@@ -4,9 +4,10 @@ import re
 
 import requests
 from django.conf import settings
-from django.db import transaction
+from django.db import IntegrityError, transaction
 
 from store.models import Payment
+from store.services import coupons
 
 
 def configured():
@@ -58,6 +59,19 @@ def record_capture(gateway_order_id, entity):
         if payment.status != Payment.Status.PENDING:
             return False
         if payment.order.status == payment.order.Status.CANCELLED:
+            payment.gateway_payment_id = payment_id
+            payment.status = Payment.Status.REVIEW
+            payment.save(update_fields=["gateway_payment_id", "status", "updated_at"])
+            return False
+        try:
+            # A first-order coupon is consumed only after a signed captured
+            # payment.  A concurrent second capture is deliberately held for
+            # manual review rather than allowing an ineligible fulfilment.
+            with transaction.atomic():
+                coupon_redeemed = coupons.finalise_redemption(payment.order)
+        except IntegrityError:
+            coupon_redeemed = False
+        if not coupon_redeemed:
             payment.gateway_payment_id = payment_id
             payment.status = Payment.Status.REVIEW
             payment.save(update_fields=["gateway_payment_id", "status", "updated_at"])

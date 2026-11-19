@@ -9,7 +9,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from .models import Category, CustomerAddress, Order, OrderEmail, OrderItem, Product, ProductImage, ProductReview
+from .models import Category, Coupon, CustomerAddress, Order, OrderEmail, OrderItem, Payment, Product, ProductImage, ProductReview
 
 
 class ProductMediaTests(TestCase):
@@ -173,6 +173,38 @@ class CheckoutTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["items"][0]["price"], "100.00")
         self.assertEqual(response.json()["total"], "200.00")
+
+    def test_first_paid_order_coupon_is_server_validated_and_saved_on_order(self):
+        Coupon.objects.create(
+            code="welcome10",
+            discount_type=Coupon.DiscountType.PERCENTAGE,
+            discount_value=Decimal("10.00"),
+            maximum_discount=Decimal("100.00"),
+            minimum_order_value=Decimal("150.00"),
+            first_paid_order_only=True,
+        )
+        response = self.client.post(reverse("cart_review"), {"cart_payload": json.dumps(self.cart), "coupon_code": " welcome10 "})
+        self.assertEqual(response.status_code, 200)
+        quote = response.json()["quote"]
+        self.assertEqual(response.json()["subtotal"], "200.00")
+        self.assertEqual(response.json()["discount"], "20.00")
+        self.assertEqual(response.json()["total"], "180.00")
+        with patch("store.views.delivery_estimate", return_value={"message": "To be confirmed", "courier": ""}):
+            result = self.client.post(reverse("checkout"), self.order_data(quote))
+        self.assertEqual(result.status_code, 302)
+        order = Order.objects.get()
+        self.assertEqual(order.coupon_code, "WELCOME10")
+        self.assertEqual(order.discount_total, Decimal("20.00"))
+        self.assertEqual(order.total, Decimal("180.00"))
+
+    def test_first_paid_order_coupon_is_not_available_after_a_paid_order(self):
+        Coupon.objects.create(code="WELCOME10", discount_value=Decimal("10.00"), first_paid_order_only=True)
+        prior = Order.objects.create(user=self.user, subtotal=Decimal("10.00"), total=Decimal("10.00"))
+        Payment.objects.create(order=prior, status=Payment.Status.PAID)
+        response = self.client.post(reverse("cart_review"), {"cart_payload": json.dumps(self.cart), "coupon_code": "WELCOME10"})
+        self.assertEqual(response.status_code, 400)
+        self.assertTrue(response.json()["coupon_error"])
+        self.assertIn("first successfully paid order", response.json()["detail"])
 
     def test_unavailable_items_are_not_silently_omitted(self):
         cart = self.cart + [{"id": 999999, "quantity": 1, "name": "Missing"}]

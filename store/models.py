@@ -7,6 +7,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.templatetags.static import static
 from django.urls import reverse
+from django.utils import timezone
 
 
 def validate_static_product_image_path(value):
@@ -103,6 +104,52 @@ class CustomerAddress(models.Model):
         return f"{self.full_name} — {self.pincode}"
 
 
+class Coupon(models.Model):
+    class DiscountType(models.TextChoices):
+        PERCENTAGE = "percentage", "Percentage"
+        FIXED = "fixed", "Fixed amount"
+
+    code = models.CharField(max_length=32, unique=True)
+    discount_type = models.CharField(max_length=12, choices=DiscountType.choices, default=DiscountType.PERCENTAGE)
+    discount_value = models.DecimalField(max_digits=10, decimal_places=2)
+    maximum_discount = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    minimum_order_value = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    first_paid_order_only = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    starts_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["code"]
+
+    def clean(self):
+        super().clean()
+        if self.discount_value is not None and self.discount_value <= 0:
+            raise ValidationError({"discount_value": "Discount value must be greater than zero."})
+        if self.discount_type == self.DiscountType.PERCENTAGE and self.discount_value > 100:
+            raise ValidationError({"discount_value": "Percentage discounts cannot exceed 100%."})
+        if self.maximum_discount is not None and self.maximum_discount <= 0:
+            raise ValidationError({"maximum_discount": "Maximum discount must be greater than zero."})
+        if self.minimum_order_value is not None and self.minimum_order_value < 0:
+            raise ValidationError({"minimum_order_value": "Minimum order value cannot be negative."})
+        if self.starts_at and self.expires_at and self.expires_at <= self.starts_at:
+            raise ValidationError({"expires_at": "Expiry must be after the start time."})
+
+    def save(self, *args, **kwargs):
+        self.code = (self.code or "").strip().upper()
+        super().save(*args, **kwargs)
+
+    @property
+    def is_currently_active(self):
+        now = timezone.now()
+        return self.is_active and (not self.starts_at or self.starts_at <= now) and (not self.expires_at or now < self.expires_at)
+
+    def __str__(self):
+        return self.code
+
+
 class Order(models.Model):
     class Environment(models.TextChoices):
         LEGACY = "legacy", "Legacy / unverified"
@@ -124,6 +171,9 @@ class Order(models.Model):
     address = models.ForeignKey(CustomerAddress, related_name="orders", null=True, on_delete=models.SET_NULL)
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.PENDING)
     subtotal = models.DecimalField(max_digits=10, decimal_places=2)
+    coupon = models.ForeignKey(Coupon, related_name="orders", null=True, blank=True, on_delete=models.PROTECT)
+    coupon_code = models.CharField(max_length=32, blank=True, editable=False)
+    discount_total = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     shipping_charge = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     total = models.DecimalField(max_digits=10, decimal_places=2)
     delivery_estimate = models.CharField(max_length=160, blank=True)
@@ -141,6 +191,19 @@ class Order(models.Model):
 
     def __str__(self):
         return self.number
+
+
+class CouponRedemption(models.Model):
+    """An audit record created only when Razorpay capture is verified."""
+    coupon = models.ForeignKey(Coupon, related_name="redemptions", on_delete=models.PROTECT)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="coupon_redemptions", on_delete=models.PROTECT)
+    order = models.OneToOneField(Order, related_name="coupon_redemption", on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=("coupon", "user"), name="unique_coupon_redemption_per_user"),
+        ]
 
 
 class OrderItem(models.Model):
