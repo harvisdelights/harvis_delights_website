@@ -1,0 +1,161 @@
+.product-reviews {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 7% 80px;
+}
+
+.reviews-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  padding-top: 38px;
+  border-top: 1px solid var(--line);
+}
+
+.reviews-heading h2 {
+  margin: 0;
+  font: 400 42px Georgia, serif;
+}
+
+.rating-summary {
+  display: grid;
+  text-align: right;
+}
+
+.rating-summary strong {
+  font-size: 28px;
+}
+
+.rating-summary strong span,
+.review-stars {
+  color: var(--gold);
+}
+
+.rating-summary span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.review-form {
+  margin: 30px 0;
+  padding: 24px;
+  border: 1px solid var(--line);
+  background: #fff;
+}
+
+.review-form h3,
+.review-card h3 {
+  margin: 0 0 8px;
+  font: 400 25px Georgia, serif;
+}
+
+.review-order-note,
+.review-eligibility,
+.no-reviews {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.review-field {
+  margin-top: 16px;
+}
+
+.review-field label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: bold;
+  font-size: 13px;
+}
+
+.review-field input[type="text"],
+.review-field textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid var(--line);
+  background: #fffdfa;
+  color: var(--ink);
+  font: inherit;
+}
+
+.review-field textarea {
+  resize: vertical;
+}
+
+.review-field ul,
+.errorlist {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: #9f2424;
+  font-size: 13px;
+}
+
+.review-field > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.review-field > div label {
+  display: inline;
+  margin: 0;
+  font-weight: normal;
+}
+
+.review-list {
+  display: grid;
+  gap: 14px;
+}
+
+.review-card {
+  padding: 20px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.review-card-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: 14px;
+}
+
+.review-card p {
+  margin: 8px 0;
+  color: var(--muted);
+}
+
+.review-card small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.review-messages p {
+  margin: 22px 0;
+  padding: 10px 14px;
+  background: #e8f3eb;
+  color: #174f2c;
+}
+
+.review-messages .error {
+  background: #f9e8e8;
+  color: #8a1f1f;
+}
+
+@media (max-width: 720px) {
+  .product-reviews {
+    padding: 0 6% 60px;
+  }
+
+  .reviews-heading {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .rating-summary {
+    text-align: left;
+  }
+
+  .reviews-heading h2 {
+    font-size: 34px;
+  }
+}

@@ -3,6 +3,7 @@ from pathlib import PurePosixPath
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.templatetags.static import static
 from django.urls import reverse
@@ -151,6 +152,36 @@ class OrderItem(models.Model):
 
     def __str__(self):
         return f"{self.product_name} × {self.quantity}"
+
+
+class ProductReview(models.Model):
+    product = models.ForeignKey(Product, related_name="reviews", on_delete=models.CASCADE)
+    order_item = models.OneToOneField(OrderItem, related_name="review", on_delete=models.PROTECT)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="product_reviews", on_delete=models.PROTECT)
+    rating = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(5)])
+    title = models.CharField(max_length=120, blank=True)
+    body = models.TextField(max_length=2000)
+    is_visible = models.BooleanField(default=True, help_text="Hidden reviews are retained but are not shown to customers.")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def clean(self):
+        super().clean()
+        if not self.order_item_id:
+            return
+        order = self.order_item.order
+        if self.product_id and self.order_item.product_id != self.product_id:
+            raise ValidationError({"order_item": "The selected order item is for a different product."})
+        if self.user_id and order.user_id != self.user_id:
+            raise ValidationError({"order_item": "Only the customer who placed this order can review it."})
+        if order.status != Order.Status.DELIVERED:
+            raise ValidationError({"order_item": "Reviews can be submitted only after the order is delivered."})
+
+    def __str__(self):
+        return f"{self.product.name}: {self.rating}/5 by {self.user}"
 
 
 class Payment(models.Model):

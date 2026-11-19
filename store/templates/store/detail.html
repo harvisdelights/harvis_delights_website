@@ -1,7 +1,7 @@
 {% extends 'store/base.html' %}
 {% load static %}
 {% block title %}{{ product.name }} | Harvi's Delights{% endblock %}
-{% block content %}<link rel="stylesheet" href="{% static 'store/gallery.css' %}"><style>.product-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}.product-actions .button{margin:0}.marketplace{display:inline-block;padding:13px 16px;color:#fff;font-size:13px;font-weight:bold}.flipkart{background:#2874f0}.meesho{background:#9f2089}</style>
+{% block content %}<link rel="stylesheet" href="{% static 'store/gallery.css' %}"><link rel="stylesheet" href="{% static 'store/reviews.css' %}"><style>.product-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}.product-actions .button{margin:0}.marketplace{display:inline-block;padding:13px 16px;color:#fff;font-size:13px;font-weight:bold}.flipkart{background:#2874f0}.meesho{background:#9f2089}</style>
 <main class="detail">
   <section class="product-gallery" data-product-gallery aria-label="{{ product.name }} photos">
     <div class="detail-image gallery-main">
@@ -28,6 +28,51 @@
   {% endif %}
   <p class="note">Add this item to your cart, then continue to checkout to place an order request.</p></div>
 </main>
+<section class="product-reviews" aria-labelledby="reviews-heading">
+  <div class="reviews-heading">
+    <div><p class="eyebrow">CUSTOMER REVIEWS</p><h2 id="reviews-heading">Ratings &amp; reviews</h2></div>
+    <div class="rating-summary" aria-label="{{ review_count }} reviews, average rating {% if average_rating %}{{ average_rating|floatformat:1 }}{% else %}not available{% endif %}">
+      {% if average_rating %}<strong>{{ average_rating|floatformat:1 }} <span aria-hidden="true">★</span></strong>{% else %}<strong>New</strong>{% endif %}
+      <span>{{ review_count }} review{{ review_count|pluralize }}</span>
+    </div>
+  </div>
+
+  {% if messages %}<div class="review-messages">{% for message in messages %}<p class="{{ message.tags }}">{{ message }}</p>{% endfor %}</div>{% endif %}
+
+  {% if eligible_order_item %}
+    <form class="review-form" method="post" action="{% url 'product_review_create' product.slug %}">
+      {% csrf_token %}
+      <h3>How was your purchase?</h3>
+      <p class="review-order-note">You are reviewing delivered order {{ eligible_order_item.order.number }}.</p>
+      {{ review_form.non_field_errors }}
+      {% for field in review_form %}
+        <div class="review-field">
+          {{ field.label_tag }}
+          {{ field }}
+          {{ field.errors }}
+        </div>
+      {% endfor %}
+      <button class="button" type="submit">Publish review</button>
+    </form>
+  {% elif not user.is_authenticated %}
+    <p class="review-eligibility">Please <a href="{% url 'login' %}?next={{ request.path|urlencode }}">sign in</a> to review products from your delivered orders.</p>
+  {% else %}
+    <p class="review-eligibility">Reviews are available after your order containing this product is marked delivered.</p>
+  {% endif %}
+
+  <div class="review-list">
+    {% for review in product_reviews %}
+      <article class="review-card">
+        <div class="review-card-heading"><strong>{{ review.user.first_name|default:review.user.username }}</strong><span class="review-stars" aria-label="{{ review.rating }} out of 5 stars">{{ review.rating }}/5 ★</span></div>
+        {% if review.title %}<h3>{{ review.title }}</h3>{% endif %}
+        <p>{{ review.body|linebreaksbr }}</p>
+        <small>{{ review.created_at|date:"j M Y" }} · Verified purchase</small>
+      </article>
+    {% empty %}
+      <p class="no-reviews">No reviews yet. Verified purchasers can be the first to share their experience.</p>
+    {% endfor %}
+  </div>
+</section>
 <script>
   (() => {
     const mainImage = document.querySelector('[data-gallery-main]');

@@ -3,6 +3,7 @@ from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.forms import PasswordResetForm
 from django.conf import settings
 from urllib.parse import urlsplit
+from .models import ProductReview
 
 
 class CustomerSignupForm(forms.Form):
@@ -79,3 +80,22 @@ class CustomerPasswordResetForm(PasswordResetForm):
         kwargs["domain_override"] = site.netloc
         kwargs["use_https"] = site.scheme == "https"
         return super().save(**kwargs)
+
+
+class ProductReviewForm(forms.ModelForm):
+    RATING_CHOICES = [(5, "5 stars"), (4, "4 stars"), (3, "3 stars"), (2, "2 stars"), (1, "1 star")]
+
+    rating = forms.TypedChoiceField(
+        choices=RATING_CHOICES,
+        coerce=int,
+        widget=forms.RadioSelect,
+        label="Your rating",
+    )
+
+    class Meta:
+        model = ProductReview
+        fields = ("rating", "title", "body")
+        widgets = {
+            "title": forms.TextInput(attrs={"placeholder": "Review title (optional)", "maxlength": 120}),
+            "body": forms.Textarea(attrs={"rows": 4, "placeholder": "Share your experience with this product.", "maxlength": 2000}),
+        }

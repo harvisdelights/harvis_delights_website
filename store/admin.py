@@ -5,7 +5,7 @@ from django.db import IntegrityError, transaction
 from django.utils.html import format_html_join
 import requests
 from .services import payments
-from .models import Category, CustomerAddress, Order, OrderEmail, OrderItem, Payment, Product, ProductImage
+from .models import Category, CustomerAddress, Order, OrderEmail, OrderItem, Payment, Product, ProductImage, ProductReview
 from .services.notifications import deliver_order_email, queue_order_status_email
 
 class ProductImageInline(admin.TabularInline):
@@ -31,6 +31,18 @@ class ProductAdmin(admin.ModelAdmin):
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
     prepopulated_fields = {"slug": ("name",)}
+
+
+@admin.register(ProductReview)
+class ProductReviewAdmin(admin.ModelAdmin):
+    list_display = ("product", "rating", "title", "user", "order_item", "is_visible", "created_at")
+    list_filter = ("rating", "is_visible", "created_at")
+    list_editable = ("is_visible",)
+    search_fields = ("product__name", "user__email", "title", "body", "order_item__order__number")
+    readonly_fields = ("product", "order_item", "user", "rating", "title", "body", "created_at", "updated_at")
+
+    def has_add_permission(self, request):
+        return False
 
 class OrderItemInline(admin.TabularInline):
     model = OrderItem

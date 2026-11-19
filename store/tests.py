@@ -9,7 +9,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from .models import Category, CustomerAddress, Order, OrderEmail, Product, ProductImage
+from .models import Category, CustomerAddress, Order, OrderEmail, OrderItem, Product, ProductImage, ProductReview
 
 
 class ProductMediaTests(TestCase):
@@ -60,6 +60,70 @@ class ProductGalleryTests(TestCase):
         self.assertContains(response, "product-gallery-thumbnails")
         self.assertContains(response, "product-images/almonds/california-almonds-side.webp")
         self.assertContains(response, "product-images/almonds/california-almonds-main.webp")
+
+
+class ProductReviewTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="reviewer@example.com",
+            email="reviewer@example.com",
+            first_name="Priya",
+            password="test-password",
+        )
+        self.client.force_login(self.user)
+        category = Category.objects.create(name="Nuts", slug="nuts")
+        self.product = Product.objects.create(
+            category=category,
+            name="Almonds",
+            slug="almonds",
+            short_description="Crunchy almonds",
+            description="Freshly packed almonds.",
+            price=Decimal("100.00"),
+        )
+
+    def order_item(self, status):
+        order = Order.objects.create(
+            user=self.user,
+            status=status,
+            subtotal=Decimal("100.00"),
+            total=Decimal("100.00"),
+        )
+        return OrderItem.objects.create(
+            order=order,
+            product=self.product,
+            product_name=self.product.name,
+            unit_price=self.product.price,
+            quantity=1,
+        )
+
+    def test_customer_cannot_review_before_delivery(self):
+        self.order_item(Order.Status.CONFIRMED)
+
+        response = self.client.post(
+            reverse("product_review_create", args=[self.product.slug]),
+            {"rating": 5, "title": "Great", "body": "Very fresh."},
+        )
+
+        self.assertRedirects(response, self.product.get_absolute_url())
+        self.assertFalse(ProductReview.objects.exists())
+
+    def test_delivered_purchaser_can_leave_a_visible_review(self):
+        order_item = self.order_item(Order.Status.DELIVERED)
+
+        response = self.client.post(
+            reverse("product_review_create", args=[self.product.slug]),
+            {"rating": 5, "title": "Great", "body": "Very fresh."},
+        )
+
+        self.assertRedirects(response, self.product.get_absolute_url())
+        review = ProductReview.objects.get()
+        self.assertEqual(review.order_item, order_item)
+        self.assertEqual(review.user, self.user)
+        self.assertTrue(review.is_visible)
+        detail = self.client.get(self.product.get_absolute_url())
+        self.assertContains(detail, "Ratings &amp; reviews")
+        self.assertContains(detail, "Very fresh.")
+        self.assertContains(detail, "Verified purchase")
 
 
 @override_settings(

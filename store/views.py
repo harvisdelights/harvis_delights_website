@@ -1,4 +1,5 @@
 from django.contrib.auth import login, logout
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.views import PasswordChangeView, PasswordResetView, PasswordResetConfirmView, PasswordResetCompleteView, PasswordResetDoneView
 from django.conf import settings
@@ -11,7 +12,9 @@ from decimal import Decimal
 from pathlib import Path
 
 from django.core import signing
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
+from django.db.models import Avg
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
@@ -19,9 +22,9 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 import requests
 from rest_framework import viewsets
-from .models import Category, CustomerAddress, Order, OrderItem, Payment, Product
+from .models import Category, CustomerAddress, Order, OrderItem, Payment, Product, ProductReview
 from .serializers import CategorySerializer, ProductSerializer
-from .forms import CheckoutAddressForm, CustomerLoginForm, CustomerSignupForm, CustomerPasswordResetForm
+from .forms import CheckoutAddressForm, CustomerLoginForm, CustomerSignupForm, CustomerPasswordResetForm, ProductReviewForm
 from .services.shipping import SELLER_AREA, SELLER_NAME, SELLER_PINCODE, delivery_estimate
 from .services.notifications import queue_new_order_emails
 from .services.zeptomail import email_configured
@@ -58,13 +61,77 @@ def home(request):
     return render(request, "store/home.html", {"featured": Product.objects.filter(is_active=True, is_featured=True)[:6]})
 def products(request):
     return render(request, "store/products.html", {"products": Product.objects.filter(is_active=True), "categories": Category.objects.all()})
+def _product_detail_context(product, user, review_form=None):
+    reviews = product.reviews.filter(is_visible=True).select_related("user")
+    summary = reviews.aggregate(average=Avg("rating"))
+    eligible_order_item = None
+    if user.is_authenticated:
+        eligible_order_item = (
+            OrderItem.objects.filter(
+                product=product,
+                order__user=user,
+                order__status=Order.Status.DELIVERED,
+                review__isnull=True,
+            )
+            .select_related("order")
+            .order_by("-order__created_at")
+            .first()
+        )
+    return {
+        "product": product,
+        "product_reviews": reviews,
+        "review_count": reviews.count(),
+        "average_rating": summary["average"],
+        "review_form": review_form or ProductReviewForm(),
+        "eligible_order_item": eligible_order_item,
+    }
+
+
 def product_detail(request, slug):
     product = get_object_or_404(
         Product.objects.select_related("category").prefetch_related("gallery"),
         slug=slug,
         is_active=True,
     )
-    return render(request, "store/detail.html", {"product": product})
+    return render(request, "store/detail.html", _product_detail_context(product, request.user))
+
+
+@login_required
+@require_POST
+def product_review_create(request, slug):
+    product = get_object_or_404(Product, slug=slug, is_active=True)
+    eligible_order_item = (
+        OrderItem.objects.filter(
+            product=product,
+            order__user=request.user,
+            order__status=Order.Status.DELIVERED,
+            review__isnull=True,
+        )
+        .select_related("order")
+        .order_by("-order__created_at")
+        .first()
+    )
+    if not eligible_order_item:
+        messages.error(request, "You can review this product only after one of your orders has been delivered.")
+        return redirect(product.get_absolute_url())
+
+    form = ProductReviewForm(request.POST)
+    if form.is_valid():
+        review = form.save(commit=False)
+        review.product = product
+        review.order_item = eligible_order_item
+        review.user = request.user
+        try:
+            review.full_clean()
+            review.save()
+        except (ValidationError, IntegrityError):
+            form.add_error(None, "Your review could not be saved. Please refresh the page and try again.")
+        else:
+            messages.success(request, "Thank you. Your review has been published.")
+            return redirect(product.get_absolute_url())
+
+    product = Product.objects.select_related("category").prefetch_related("gallery").get(pk=product.pk)
+    return render(request, "store/detail.html", _product_detail_context(product, request.user, form), status=400)
 
 def signup(request):
     if request.user.is_authenticated:
