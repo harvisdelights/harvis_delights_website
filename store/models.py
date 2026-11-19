@@ -1,8 +1,30 @@
 import uuid
+from pathlib import PurePosixPath
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
+from django.templatetags.static import static
 from django.urls import reverse
+
+
+def validate_static_product_image_path(value):
+    """Allow only repository assets under store/static/store/product-images/."""
+    if not value:
+        return
+    path = PurePosixPath(value)
+    allowed_extensions = {".avif", ".gif", ".jpeg", ".jpg", ".png", ".webp"}
+    if (
+        "\\" in value
+        or path.is_absolute()
+        or ".." in path.parts
+        or not value.startswith("product-images/")
+        or path.suffix.lower() not in allowed_extensions
+    ):
+        raise ValidationError(
+            "Use a relative image path under product-images/, for example "
+            "product-images/raisins/afghani-black-raisins-main.webp."
+        )
 
 class Category(models.Model):
     name = models.CharField(max_length=80, unique=True)
@@ -18,6 +40,12 @@ class Product(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=2)
     weight = models.CharField(max_length=40, blank=True)
     image = models.ImageField(upload_to="products/", blank=True, null=True)
+    static_image_path = models.CharField(
+        max_length=255,
+        blank=True,
+        validators=[validate_static_product_image_path],
+        help_text="Optional Git-managed image path, e.g. product-images/almonds/california-almonds-main.webp. Takes priority over the uploaded image.",
+    )
     shipping_weight_kg = models.DecimalField(max_digits=5, decimal_places=3, default=0.500, help_text="Used for delivery estimates.")
     flipkart_url = models.URLField(blank=True, help_text="Optional product listing URL on Flipkart")
     meesho_url = models.URLField(blank=True, help_text="Optional product listing URL on Meesho")
@@ -29,12 +57,30 @@ class Product(models.Model):
     def __str__(self): return self.name
     def get_absolute_url(self): return reverse("product_detail", args=[self.slug])
 
+    @property
+    def display_image_url(self):
+        if self.static_image_path:
+            return static(f"store/{self.static_image_path}")
+        return self.image.url if self.image else ""
+
 class ProductImage(models.Model):
     product = models.ForeignKey(Product, related_name="gallery", on_delete=models.CASCADE)
-    image = models.ImageField(upload_to="products/gallery/")
+    image = models.ImageField(upload_to="products/gallery/", blank=True, null=True)
+    static_image_path = models.CharField(
+        max_length=255,
+        blank=True,
+        validators=[validate_static_product_image_path],
+        help_text="Optional Git-managed image path under product-images/. Takes priority over the uploaded image.",
+    )
     alt_text = models.CharField(max_length=140, blank=True)
     position = models.PositiveIntegerField(default=0)
     class Meta: ordering = ["position", "id"]
+
+    @property
+    def display_image_url(self):
+        if self.static_image_path:
+            return static(f"store/{self.static_image_path}")
+        return self.image.url if self.image else ""
 
 
 class CustomerAddress(models.Model):

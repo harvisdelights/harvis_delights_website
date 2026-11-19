@@ -11,6 +11,7 @@ from .services.notifications import deliver_order_email, queue_order_status_emai
 class ProductImageInline(admin.TabularInline):
     model = ProductImage
     extra = 1
+    fields = ("image", "static_image_path", "alt_text", "position")
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
@@ -19,7 +20,7 @@ class ProductAdmin(admin.ModelAdmin):
     list_editable = ("is_featured", "is_active")
     fieldsets = (
         ("Product details", {"fields": ("category", "name", "slug", "short_description", "description", "price", "weight", "shipping_weight_kg")}),
-        ("Photos", {"fields": ("image",)}),
+        ("Photos", {"fields": ("image", "static_image_path")}),
         ("Marketplace links", {"fields": ("flipkart_url", "meesho_url")}),
         ("Visibility", {"fields": ("is_featured", "is_active")}),
     )

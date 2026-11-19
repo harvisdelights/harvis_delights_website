@@ -42,11 +42,11 @@ class ProductGalleryTests(TestCase):
             short_description="Crunchy almonds",
             description="Freshly packed almonds.",
             price=Decimal("100.00"),
-            image="products/almonds-primary.jpg",
+            static_image_path="product-images/almonds/california-almonds-main.webp",
         )
         ProductImage.objects.create(
             product=self.product,
-            image="products/gallery/almonds-side.jpg",
+            static_image_path="product-images/almonds/california-almonds-side.webp",
             alt_text="Side view of almonds",
             position=1,
         )
@@ -58,7 +58,8 @@ class ProductGalleryTests(TestCase):
         self.assertContains(response, "data-product-gallery")
         self.assertContains(response, "data-gallery-image")
         self.assertContains(response, "product-gallery-thumbnails")
-        self.assertContains(response, "products/gallery/almonds-side.jpg")
+        self.assertContains(response, "product-images/almonds/california-almonds-side.webp")
+        self.assertContains(response, "product-images/almonds/california-almonds-main.webp")
 
 
 @override_settings(
