@@ -97,25 +97,32 @@ class ProductReviewTests(TestCase):
         )
 
     def test_customer_cannot_review_before_delivery(self):
-        self.order_item(Order.Status.CONFIRMED)
+        order_item = self.order_item(Order.Status.CONFIRMED)
 
         response = self.client.post(
-            reverse("product_review_create", args=[self.product.slug]),
+            reverse("order_item_review_create", args=[order_item.order.number, order_item.id]),
             {"rating": 5, "title": "Great", "body": "Very fresh."},
         )
 
-        self.assertRedirects(response, self.product.get_absolute_url())
+        self.assertRedirects(response, reverse("order_confirmation", args=[order_item.order.number]))
         self.assertFalse(ProductReview.objects.exists())
 
     def test_delivered_purchaser_can_leave_a_visible_review(self):
         order_item = self.order_item(Order.Status.DELIVERED)
+        order_page = self.client.get(reverse("order_confirmation", args=[order_item.order.number]))
+        self.assertContains(order_page, "Rate and review this product")
+
+        order_page = self.client.get(
+            f"{reverse('order_confirmation', args=[order_item.order.number])}?review={order_item.id}"
+        )
+        self.assertContains(order_page, f"Rate {self.product.name}")
 
         response = self.client.post(
-            reverse("product_review_create", args=[self.product.slug]),
+            reverse("order_item_review_create", args=[order_item.order.number, order_item.id]),
             {"rating": 5, "title": "Great", "body": "Very fresh."},
         )
 
-        self.assertRedirects(response, self.product.get_absolute_url())
+        self.assertRedirects(response, reverse("order_confirmation", args=[order_item.order.number]))
         review = ProductReview.objects.get()
         self.assertEqual(review.order_item, order_item)
         self.assertEqual(review.user, self.user)
@@ -124,6 +131,14 @@ class ProductReviewTests(TestCase):
         self.assertContains(detail, "Ratings &amp; reviews")
         self.assertContains(detail, "Very fresh.")
         self.assertContains(detail, "Verified purchase")
+        self.assertNotContains(detail, "How was your purchase?")
+
+        duplicate = self.client.post(
+            reverse("order_item_review_create", args=[order_item.order.number, order_item.id]),
+            {"rating": 4, "title": "Again", "body": "Second review."},
+        )
+        self.assertRedirects(duplicate, reverse("order_confirmation", args=[order_item.order.number]))
+        self.assertEqual(ProductReview.objects.count(), 1)
 
 
 @override_settings(

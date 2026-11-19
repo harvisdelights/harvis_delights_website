@@ -1,12 +1,37 @@
 {% extends 'store/base.html' %}
+{% load static %}
 {% block title %}Your order | Harvi's Delights{% endblock %}
 {% block content %}
+<link rel="stylesheet" href="{% static 'store/reviews.css' %}">
 <main class="confirmation-page"><section class="confirmation-card">
   <p class="eyebrow">ORDER RECEIVED</p>
   <h1>Thank you, {{ order.user.first_name|default:order.user.email }}.</h1>
   <p>Your reference is <strong>{{ order.number }}</strong>. Order status: {{ order.get_status_display }}. Payment status is shown separately below.</p>
+  {% if messages %}<div class="review-messages">{% for message in messages %}<p class="{{ message.tags }}">{{ message }}</p>{% endfor %}</div>{% endif %}
   <div class="confirmation-detail"><span>Estimated delivery</span><b>{{ order.delivery_estimate|default:"To be confirmed" }}</b>{% if order.shiprocket_courier %}<small>Courier option: {{ order.shiprocket_courier }}</small>{% endif %}</div>
-  <h2>Items</h2>{% for item in order.items.all %}<div class="confirmation-item"><span>{{ item.product_name }} &times; {{ item.quantity }}</span><b>&#8377;{{ item.unit_price }} each</b></div>{% endfor %}
+  <h2>Items</h2>{% for item in order.items.all %}
+  <div class="confirmation-item"><span>{{ item.product_name }} &times; {{ item.quantity }}</span><b>&#8377;{{ item.unit_price }} each</b></div>
+  {% if item.can_review %}
+    <div class="order-review-action">
+      {% if item.show_review_form %}
+        <form class="review-form" method="post" action="{% url 'order_item_review_create' order.number item.id %}">
+          {% csrf_token %}
+          <h3>Rate {{ item.product_name }}</h3>
+          {{ item.review_form.non_field_errors }}
+          {% for field in item.review_form %}
+            <div class="review-field">{{ field.label_tag }}{{ field }}{{ field.errors }}</div>
+          {% endfor %}
+          <button class="button" type="submit">Publish review</button>
+          <a class="review-cancel" href="{% url 'order_confirmation' order.number %}">Cancel</a>
+        </form>
+      {% else %}
+        <a class="review-link" href="{% url 'order_confirmation' order.number %}?review={{ item.id }}#review-{{ item.id }}" id="review-{{ item.id }}">Rate and review this product</a>
+      {% endif %}
+    </div>
+  {% elif order.status == 'delivered' %}
+    <p class="review-complete">You have already reviewed this product from this order.</p>
+  {% endif %}
+  {% endfor %}
   <div class="summary-total"><span>Total (free delivery)</span><strong>&#8377;{{ order.total }}</strong></div>
   {% if order.payment.status == 'paid' %}{% if order.payment.environment == 'live' %}<p><strong>Payment captured.</strong></p>{% elif order.payment.environment == 'test' %}<p><strong>Test payment captured.</strong> No real money was charged.</p>{% else %}<p><strong>Historical payment captured.</strong> Contact the seller to verify its environment.</p>{% endif %}
   {% elif order.payment.status == 'review' %}<p>Payment requires review. Please contact the seller before retrying.</p>

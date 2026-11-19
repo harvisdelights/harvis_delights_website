@@ -37,29 +37,6 @@
     </div>
   </div>
 
-  {% if messages %}<div class="review-messages">{% for message in messages %}<p class="{{ message.tags }}">{{ message }}</p>{% endfor %}</div>{% endif %}
-
-  {% if eligible_order_item %}
-    <form class="review-form" method="post" action="{% url 'product_review_create' product.slug %}">
-      {% csrf_token %}
-      <h3>How was your purchase?</h3>
-      <p class="review-order-note">You are reviewing delivered order {{ eligible_order_item.order.number }}.</p>
-      {{ review_form.non_field_errors }}
-      {% for field in review_form %}
-        <div class="review-field">
-          {{ field.label_tag }}
-          {{ field }}
-          {{ field.errors }}
-        </div>
-      {% endfor %}
-      <button class="button" type="submit">Publish review</button>
-    </form>
-  {% elif not user.is_authenticated %}
-    <p class="review-eligibility">Please <a href="{% url 'login' %}?next={{ request.path|urlencode }}">sign in</a> to review products from your delivered orders.</p>
-  {% else %}
-    <p class="review-eligibility">Reviews are available after your order containing this product is marked delivered.</p>
-  {% endif %}
-
   <div class="review-list">
     {% for review in product_reviews %}
       <article class="review-card">

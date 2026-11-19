@@ -44,6 +44,34 @@
   background: #fff;
 }
 
+.order-review-action {
+  margin: -4px 0 18px;
+}
+
+.order-review-action .review-form {
+  margin: 12px 0 0;
+}
+
+.review-link,
+.review-cancel {
+  display: inline-block;
+  margin-top: 8px;
+  color: var(--forest);
+  font-size: 13px;
+  font-weight: bold;
+  text-decoration: underline;
+}
+
+.review-cancel {
+  margin-left: 16px;
+}
+
+.review-complete {
+  margin: -4px 0 18px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .review-form h3,
 .review-card h3 {
   margin: 0 0 8px;

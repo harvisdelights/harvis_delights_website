@@ -61,29 +61,14 @@ def home(request):
     return render(request, "store/home.html", {"featured": Product.objects.filter(is_active=True, is_featured=True)[:6]})
 def products(request):
     return render(request, "store/products.html", {"products": Product.objects.filter(is_active=True), "categories": Category.objects.all()})
-def _product_detail_context(product, user, review_form=None):
+def _product_detail_context(product):
     reviews = product.reviews.filter(is_visible=True).select_related("user")
     summary = reviews.aggregate(average=Avg("rating"))
-    eligible_order_item = None
-    if user.is_authenticated:
-        eligible_order_item = (
-            OrderItem.objects.filter(
-                product=product,
-                order__user=user,
-                order__status=Order.Status.DELIVERED,
-                review__isnull=True,
-            )
-            .select_related("order")
-            .order_by("-order__created_at")
-            .first()
-        )
     return {
         "product": product,
         "product_reviews": reviews,
         "review_count": reviews.count(),
         "average_rating": summary["average"],
-        "review_form": review_form or ProductReviewForm(),
-        "eligible_order_item": eligible_order_item,
     }
 
 
@@ -93,33 +78,30 @@ def product_detail(request, slug):
         slug=slug,
         is_active=True,
     )
-    return render(request, "store/detail.html", _product_detail_context(product, request.user))
+    return render(request, "store/detail.html", _product_detail_context(product))
 
 
 @login_required
 @require_POST
-def product_review_create(request, slug):
-    product = get_object_or_404(Product, slug=slug, is_active=True)
-    eligible_order_item = (
-        OrderItem.objects.filter(
-            product=product,
-            order__user=request.user,
-            order__status=Order.Status.DELIVERED,
-            review__isnull=True,
-        )
-        .select_related("order")
-        .order_by("-order__created_at")
-        .first()
+def order_item_review_create(request, number, item_id):
+    order = get_object_or_404(
+        Order.objects.prefetch_related("items__product", "items__review"),
+        number=number,
+        user=request.user,
     )
-    if not eligible_order_item:
-        messages.error(request, "You can review this product only after one of your orders has been delivered.")
-        return redirect(product.get_absolute_url())
+    order_item = get_object_or_404(OrderItem.objects.select_related("product"), pk=item_id, order=order)
+    if order.status != Order.Status.DELIVERED:
+        messages.error(request, "Reviews become available after this order is marked delivered.")
+        return redirect("order_confirmation", number=order.number)
+    if ProductReview.objects.filter(order_item=order_item).exists():
+        messages.error(request, "You have already reviewed this item from this order.")
+        return redirect("order_confirmation", number=order.number)
 
     form = ProductReviewForm(request.POST)
     if form.is_valid():
         review = form.save(commit=False)
-        review.product = product
-        review.order_item = eligible_order_item
+        review.product = order_item.product
+        review.order_item = order_item
         review.user = request.user
         try:
             review.full_clean()
@@ -128,10 +110,9 @@ def product_review_create(request, slug):
             form.add_error(None, "Your review could not be saved. Please refresh the page and try again.")
         else:
             messages.success(request, "Thank you. Your review has been published.")
-            return redirect(product.get_absolute_url())
+            return redirect("order_confirmation", number=order.number)
 
-    product = Product.objects.select_related("category").prefetch_related("gallery").get(pk=product.pk)
-    return render(request, "store/detail.html", _product_detail_context(product, request.user, form), status=400)
+    return _render_order_confirmation(request, order, review_item_id=order_item.id, review_form=form, status=400)
 
 def signup(request):
     if request.user.is_authenticated:
@@ -323,9 +304,34 @@ def checkout(request):
 
 @login_required
 def order_confirmation(request, number):
-    order = get_object_or_404(Order.objects.prefetch_related("items"), number=number, user=request.user)
+    order = get_object_or_404(
+        Order.objects.prefetch_related("items__product", "items__review"),
+        number=number,
+        user=request.user,
+    )
+    try:
+        review_item_id = int(request.GET.get("review", ""))
+    except (TypeError, ValueError):
+        review_item_id = None
+    return _render_order_confirmation(request, order, review_item_id=review_item_id)
+
+
+def _render_order_confirmation(request, order, review_item_id=None, review_form=None, status=200):
     eligible_mode = order.environment == settings.RAZORPAY_MODE or (settings.RAZORPAY_MODE == "test" and order.environment == Order.Environment.LEGACY)
-    return render(request, "store/order_confirmation.html", {"order": order, "payment_enabled": payments.configured() and eligible_mode, "payment_mode": settings.RAZORPAY_MODE})
+    for item in order.items.all():
+        item.can_review = order.status == Order.Status.DELIVERED and not hasattr(item, "review")
+        item.show_review_form = item.can_review and item.id == review_item_id
+        item.review_form = review_form if item.show_review_form else ProductReviewForm()
+    return render(
+        request,
+        "store/order_confirmation.html",
+        {
+            "order": order,
+            "payment_enabled": payments.configured() and eligible_mode,
+            "payment_mode": settings.RAZORPAY_MODE,
+        },
+        status=status,
+    )
 
 
 @login_required

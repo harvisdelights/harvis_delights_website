@@ -23,7 +23,7 @@ urlpatterns = [
     path("orders/<str:number>/payment/verify/", views.payment_verify, name="payment_verify"),
     path("payments/razorpay/webhook/", views.razorpay_webhook, name="razorpay_webhook"),
     path("products/", views.products, name="products"),
-    path("products/<slug:slug>/review/", views.product_review_create, name="product_review_create"),
+    path("orders/<str:number>/items/<int:item_id>/review/", views.order_item_review_create, name="order_item_review_create"),
     path("products/<slug:slug>/", views.product_detail, name="product_detail"),
     path("api/", include(router.urls)),
 ]
