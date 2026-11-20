@@ -130,6 +130,7 @@
     submit.textContent = 'Placing order...';
   });
   window.addEventListener('harvis-cart-changed', reviewCart);
+  window.addEventListener('harvis-cart-synchronised', reviewCart);
   window.addEventListener('storage', event => { if (event.key === key) reviewCart(); });
   reviewCart();
 })();

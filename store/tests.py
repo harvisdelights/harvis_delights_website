@@ -9,7 +9,8 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from .models import Category, Coupon, CustomerAddress, Order, OrderEmail, OrderItem, Payment, Product, ProductImage, ProductReview
+from .models import Cart, CartItem, Category, Coupon, CustomerAddress, Order, OrderEmail, OrderItem, Payment, Product, ProductImage, ProductReview
+from .services import carts
 
 
 class ProductMediaTests(TestCase):
@@ -167,6 +168,29 @@ class CheckoutTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "checkout.js")
         self.assertContains(response, 'name="checkout_id"')
+
+    def test_guest_cart_merges_with_account_cart_without_doubling_matching_items(self):
+        cart = Cart.objects.create(user=self.user)
+        CartItem.objects.create(cart=cart, product=self.product, quantity=2)
+        response = self.client.post(reverse("cart_merge"), {"cart_payload": json.dumps([{ "id": self.product.id, "quantity": 1 }])})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["items"][0]["quantity"], 2)
+        cart.refresh_from_db()
+        self.assertEqual(cart.items.get(product=self.product).quantity, 2)
+
+    def test_authenticated_cart_mutation_rejects_stale_version_without_losing_items(self):
+        initial = self.client.post(reverse("cart_merge"), {"cart_payload": "[]"}).json()
+        first = self.client.post(reverse("cart_mutate"), {"action": "add", "product_id": self.product.id, "quantity": 0, "version": initial["version"]})
+        self.assertEqual(first.status_code, 200)
+        stale = self.client.post(reverse("cart_mutate"), {"action": "set", "product_id": self.product.id, "quantity": 0, "version": initial["version"]})
+        self.assertEqual(stale.status_code, 409)
+        self.assertEqual(stale.json()["items"][0]["quantity"], 1)
+
+    def test_checkout_cart_cleanup_preserves_later_added_quantity(self):
+        cart = Cart.objects.create(user=self.user)
+        CartItem.objects.create(cart=cart, product=self.product, quantity=3)
+        carts.remove_checked_out_quantities(self.user, {self.product.id: 2})
+        self.assertEqual(cart.items.get(product=self.product).quantity, 1)
 
     def test_review_uses_database_price_and_total(self):
         response = self.review()

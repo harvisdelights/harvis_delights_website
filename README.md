@@ -16,6 +16,10 @@ Open `/admin/` to add categories, products, primary photos, extra gallery photos
 
 Customers can register and sign in with their email address at `/signup/` and `/login/`. Accounts use Django's built-in authentication tables in the configured database (Render PostgreSQL in production). Customers can view their account and change their password. Password recovery becomes available after ZeptoMail and `PUBLIC_SITE_URL` are configured.
 
+### Saved carts
+
+Guests retain a device-local cart until they sign in. On the first authenticated page, that guest cart merges into the account cart without doubling matching products: the higher quantity (up to 20) is retained. Afterwards, each add, quantity change, and removal is saved to the server-side cart, so the signed-in customer sees it on another device. Cart updates use a version number; if another device changes the cart first, the site refreshes the cart and asks the customer to repeat the last change instead of silently overwriting it. Logging out removes the previous account's cached cart from that browser for privacy. Checkout validates prices independently and removes only the quantities actually ordered from the server cart, preserving products or later additions.
+
 ## Transactional email
 
 Order requests, seller order alerts, confirmed/shipped/cancelled status updates and password recovery use ZeptoMail's HTTPS Send API. Configure ZeptoMail's verified domain and Mail Agent first. In Render's Environment settings set `ZEPTOMAIL_API_URL` to the exact HTTPS Send Email endpoint provided by the agent (for example `https://api.zeptomail.com/v1.1/email`), `ZEPTOMAIL_API_KEY` to its Send API key, and `PUBLIC_SITE_URL` to the customer-facing HTTPS origin (for example `https://www.harvisdelights.com`). Set `DEFAULT_FROM_EMAIL` to a display name and a verified domain sender, `SELLER_NOTIFICATION_EMAIL` to the private inbox that receives new-order alerts, and `CUSTOMER_SUPPORT_EMAIL` to the address shown to customers. Use only a verified sender. Keep the API key out of Git and chat.

@@ -30,6 +30,7 @@ from .services.notifications import queue_new_order_emails
 from .services.zeptomail import email_configured
 from .services import payments
 from .services import coupons
+from .services import carts
 
 logger = logging.getLogger(__name__)
 
@@ -174,12 +175,12 @@ class CustomerPasswordChangeView(PasswordChangeView):
     template_name = "store/password_change.html"
     success_url = reverse_lazy("account")
 
-def _cart_quantities(raw_cart):
+def _cart_quantities(raw_cart, *, allow_empty=False):
     try:
         submitted = json.loads(raw_cart)
     except (TypeError, json.JSONDecodeError):
         raise ValueError("Your cart could not be read. Please review it.")
-    if not isinstance(submitted, list) or not submitted or len(submitted) > 100:
+    if not isinstance(submitted, list) or (not submitted and not allow_empty) or len(submitted) > 100:
         raise ValueError("Your cart is empty or invalid. Please review it.")
     quantities = {}
     for item in submitted:
@@ -194,6 +195,43 @@ def _cart_quantities(raw_cart):
             raise ValueError("Your cart contains an invalid quantity or duplicate item. Please review it.")
         quantities[product_id] = quantity
     return quantities
+
+
+@login_required
+@require_POST
+def cart_merge(request):
+    """Merge an unsigned guest-device cart into the signed-in account cart."""
+    try:
+        quantities = _cart_quantities(request.POST.get("cart_payload", "[]"), allow_empty=True)
+    except ValueError as exc:
+        return JsonResponse({"detail": str(exc)}, status=400)
+    return JsonResponse(carts.merge_guest_cart(request.user, quantities))
+
+
+@login_required
+@require_POST
+def cart_mutate(request):
+    try:
+        product_id = int(request.POST.get("product_id", ""))
+        quantity = int(request.POST.get("quantity", "0"))
+        expected_version = int(request.POST.get("version", ""))
+    except (TypeError, ValueError):
+        return JsonResponse({"detail": "Invalid cart update."}, status=400)
+    if product_id < 1 or expected_version < 0:
+        return JsonResponse({"detail": "Invalid cart update."}, status=400)
+    try:
+        payload, current = carts.mutate(
+            request.user,
+            action=request.POST.get("action", ""),
+            product_id=product_id,
+            quantity=quantity,
+            expected_version=expected_version,
+        )
+    except ValueError as exc:
+        return JsonResponse({"detail": str(exc)}, status=400)
+    if current is not None:
+        return JsonResponse({"detail": "Your cart changed on another device. It has been refreshed; please repeat your last change.", **current}, status=409)
+    return JsonResponse(payload)
 
 
 def _cart_products(quantities, lock=False):
@@ -315,6 +353,7 @@ def checkout(request):
                                 address = CustomerAddress.objects.create(user=request.user, **{key: form.cleaned_data[key] for key in ("full_name", "phone", "line1", "line2", "city", "state", "pincode")})
                                 order = Order.objects.create(checkout_id=checkout_id, user=request.user, address=address, environment=settings.RAZORPAY_MODE if settings.RAZORPAY_MODE in ("test", "live") else Order.Environment.LEGACY, status=Order.Status.PENDING, subtotal=subtotal, coupon=coupon, coupon_code=coupon.code if coupon else "", discount_total=discount, total=total, delivery_estimate=estimate["message"], shiprocket_courier=estimate["courier"])
                                 OrderItem.objects.bulk_create([OrderItem(order=order, product=p, product_name=p.name, unit_price=p.price, quantity=quantities[p.id]) for p in products])
+                                transaction.on_commit(lambda user=request.user, ordered=quantities.copy(): carts.remove_checked_out_quantities(user, ordered), robust=True)
                                 queue_new_order_emails(order)
                         except ValueError as exc:
                             form.add_error(None, str(exc))

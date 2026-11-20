@@ -104,6 +104,30 @@ class CustomerAddress(models.Model):
         return f"{self.full_name} — {self.pincode}"
 
 
+class Cart(models.Model):
+    """The authenticated customer's durable shopping cart."""
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, related_name="cart", on_delete=models.CASCADE)
+    version = models.PositiveIntegerField(default=0, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Cart for {self.user}"
+
+
+class CartItem(models.Model):
+    cart = models.ForeignKey(Cart, related_name="items", on_delete=models.CASCADE)
+    product = models.ForeignKey(Product, related_name="cart_items", on_delete=models.CASCADE)
+    quantity = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(20)])
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=("cart", "product"), name="unique_product_per_cart"),
+        ]
+
+
 class Coupon(models.Model):
     class DiscountType(models.TextChoices):
         PERCENTAGE = "percentage", "Percentage"
