@@ -37,7 +37,11 @@ WSGI_APPLICATION = "config.wsgi.application"
 # Local development uses SQLite. Render supplies DATABASE_URL for managed PostgreSQL.
 # DATA_DIR is used only for user-uploaded media in production.
 DATA_DIR = Path(os.environ.get("DATA_DIR", BASE_DIR))
-DATA_DIR.mkdir(parents=True, exist_ok=True)
+# Do not create DATA_DIR while importing settings.  Render runs management
+# commands during its build phase, but persistent disks are mounted only when
+# the deployed service starts; attempting to create /var/data in the build
+# container fails with a read-only-filesystem error.  FileSystemStorage creates
+# MEDIA_ROOT when an upload is saved, after the disk is mounted at runtime.
 DATABASE_URL = os.environ.get("DATABASE_URL")
 ALLOW_EPHEMERAL_SQLITE = env_bool("DJANGO_ALLOW_EPHEMERAL_SQLITE", False)
 if not DATABASE_URL and not DEBUG and not ALLOW_EPHEMERAL_SQLITE:
