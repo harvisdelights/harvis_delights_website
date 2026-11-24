@@ -1,0 +1,141 @@
+/*
+ * Brand palette: quiet ivory surfaces (about 75%), forest hierarchy (about
+ * 20%), and gold reserved for small, meaningful accents (about 5%).
+ * This layer deliberately changes presentation only; templates and behaviour
+ * continue to use their existing classes and interactions.
+ */
+:root {
+  --forest: #183d30;
+  --forest-soft: #24503f;
+  --ink: #1c2821;
+  --cream: #f8f4ea;
+  --ivory: #fffdf8;
+  --surface: #f2ecdf;
+  --gold: #bd914b;
+  --gold-soft: #e8d6b5;
+  --muted: #657169;
+  --line: #e4dac9;
+}
+
+body {
+  background:
+    radial-gradient(circle at 10% 0%, rgba(189, 145, 75, .09), transparent 27rem),
+    linear-gradient(135deg, #fbf8f0 0%, var(--cream) 55%, #f2f5ee 100%);
+}
+
+::selection { background: var(--gold-soft); color: var(--ink); }
+
+header {
+  background: rgba(255, 253, 248, .94);
+  border-color: rgba(189, 145, 75, .18);
+  box-shadow: 0 5px 20px rgba(28, 40, 33, .035);
+}
+
+nav a { transition: color .18s ease; }
+
+.brand > span {
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .13), 0 4px 12px rgba(24, 61, 48, .12);
+}
+
+/* Forest remains the dependable action colour; gold is a smaller signature accent. */
+.button,
+.cart-checkout {
+  background: var(--forest);
+  box-shadow: 0 5px 12px rgba(24, 61, 48, .12);
+  transition: background-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.button:hover,
+.cart-checkout:hover {
+  background: var(--forest-soft);
+  box-shadow: 0 8px 18px rgba(24, 61, 48, .17);
+  transform: translateY(-1px);
+}
+
+.button:focus-visible,
+.cart-checkout:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  outline: 3px solid rgba(189, 145, 75, .48);
+  outline-offset: 3px;
+}
+
+.cart-checkout.is-disabled,
+.cart-checkout.is-disabled:hover {
+  background: #d8d0c2;
+  box-shadow: none;
+  transform: none;
+}
+
+.product,
+.order-summary,
+.confirmation-card,
+.auth-card,
+.account-card,
+.checkout-empty {
+  background: rgba(255, 253, 248, .94);
+  border-color: rgba(189, 145, 75, .2);
+}
+
+.product {
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(28, 40, 33, .035);
+  transition: transform .2s ease, box-shadow .2s ease;
+}
+
+.product:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 14px 30px rgba(28, 40, 33, .09);
+}
+
+.product-image,
+.detail-image,
+.cart-item img,
+.cart-thumb {
+  background: #eee6d6;
+}
+
+.filters button {
+  border: 1px solid transparent;
+  background: #eee8db;
+  transition: background-color .18s ease, border-color .18s ease, color .18s ease;
+}
+
+.filters button:hover {
+  border-color: var(--gold);
+  background: #f7f0e4;
+}
+
+.filters button.active { background: var(--forest); }
+
+.benefits {
+  background: #f0eadf;
+  border-top: 1px solid rgba(189, 145, 75, .14);
+  border-bottom: 1px solid rgba(189, 145, 75, .14);
+}
+
+.light { background: #f4edde; }
+
+.order-summary,
+.confirmation-card,
+.auth-card,
+.account-card {
+  box-shadow: 0 15px 34px rgba(28, 40, 33, .055);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: 2px solid rgba(189, 145, 75, .58);
+  outline-offset: 1px;
+  border-color: var(--gold);
+}
+
+footer {
+  background: #112d23;
+  border-top: 2px solid rgba(189, 145, 75, .54);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: .01ms !important; }
+}
