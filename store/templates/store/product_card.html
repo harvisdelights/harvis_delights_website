@@ -1,1 +1,16 @@
-<article class="product" data-category="{{ product.category.slug }}"><a class="product-image" href="{{ product.get_absolute_url }}">{% if product.display_image_url %}<img src="{{ product.display_image_url }}" alt="{{ product.name }}">{% else %}<span>{{ product.name|slice:':1' }}</span>{% endif %}</a><div class="product-copy"><small>{{ product.category.name }} {% if product.weight %}· {{ product.weight }}{% endif %}</small><h3><a href="{{ product.get_absolute_url }}">{{ product.name }}</a></h3><p>{{ product.short_description }}</p><div class="price-row"><strong>₹{{ product.price }}</strong><button class="add" data-add data-id="{{ product.id }}" data-name="{{ product.name }}" data-price="{{ product.price }}" {% if product.display_image_url %}data-image="{{ product.display_image_url }}"{% endif %}>Add to cart</button></div></div></article>
+<article class="product" data-category="{{ product.category.slug }}">
+  <a class="product-image" href="{{ product.get_absolute_url }}">{% if product.display_image_url %}<img src="{{ product.display_image_url }}" alt="{{ product.name }}">{% else %}<span>{{ product.name|slice:':1' }}</span>{% endif %}</a>
+  <div class="product-copy">
+    <small>{{ product.category.name }} {% if product.weight %}&middot; {{ product.weight }}{% endif %}</small>
+    <h3><a href="{{ product.get_absolute_url }}">{{ product.name }}</a></h3>
+    <p>{{ product.short_description }}</p>
+    {% if product.active_variants %}
+      <div class="variant-picker variant-picker--card" aria-label="Choose a size for {{ product.name }}">
+        {% for variant in product.active_variants %}
+          <button type="button" class="variant-option{% if variant.id == product.default_variant.id %} is-selected{% endif %}" data-variant-option data-variant-id="{{ variant.id }}" data-variant-name="{{ variant.name }}" data-variant-price="{{ variant.price }}" aria-pressed="{% if variant.id == product.default_variant.id %}true{% else %}false{% endif %}">{{ variant.name }}</button>
+        {% endfor %}
+      </div>
+    {% endif %}
+    <div class="price-row"><strong data-variant-price-display>&#8377;{{ product.display_price }}</strong><button class="add" data-add data-id="{{ product.id }}" {% if product.active_variants %}data-variant-id="{{ product.default_variant.id }}" data-variant-name="{{ product.default_variant.name }}"{% endif %} data-name="{{ product.name }}{% if product.active_variants %} &mdash; {{ product.default_variant.name }}{% endif %}" data-price="{{ product.display_price }}" {% if product.display_image_url %}data-image="{{ product.display_image_url }}"{% endif %}>Add to cart</button></div>
+  </div>
+</article>

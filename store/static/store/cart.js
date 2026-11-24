@@ -20,6 +20,10 @@
   };
   const money = value => `₹${Number(value).toFixed(2)}`;
   const message = value => { if (status) status.textContent = value || ''; };
+  const parseLineId = id => {
+    const match = String(id).match(/^(\d+)(?::v(\d+))?$/);
+    return match ? {productId: match[1], variantId: match[2] || ''} : null;
+  };
   const formData = fields => {
     const data = new FormData();
     Object.entries(fields).forEach(([name, value]) => data.append(name, value));
@@ -59,8 +63,10 @@
     const perform = async () => {
       await cartReady;
       if (!authenticated) return false;
+      const line = parseLineId(productId);
+      if (!line) { message('Your cart item is invalid. Please refresh the page.'); return false; }
       try {
-        const response = await fetch(config.mutateUrl, {method: 'POST', headers: {'X-CSRFToken': config.csrfToken}, body: formData({action, product_id: productId, quantity, version: serverVersion})});
+        const response = await fetch(config.mutateUrl, {method: 'POST', headers: {'X-CSRFToken': config.csrfToken}, body: formData({action, product_id: line.productId, variant_id: line.variantId, quantity, version: serverVersion})});
         const payload = await response.json();
         if (!response.ok) {
           if (response.status === 409 && payload.items) {
@@ -97,10 +103,11 @@
   }
 
   async function add(metadata) {
-    if (authenticated) return mutate('add', metadata.id);
-    const cart = read(), item = cart.find(entry => entry.id === metadata.id);
+    const lineId = metadata.variantId ? `${metadata.id}:v${metadata.variantId}` : metadata.id;
+    if (authenticated) return mutate('add', lineId);
+    const cart = read(), item = cart.find(entry => entry.id === lineId);
     if (item) item.quantity = Math.min(20, item.quantity + 1);
-    else cart.push({...metadata, price: Number(metadata.price), quantity: 1});
+    else cart.push({...metadata, id: lineId, variant_id: metadata.variantId || '', price: Number(metadata.price), quantity: 1});
     save(cart);
     render();
     return true;
@@ -148,10 +155,27 @@
   }));
   document.querySelectorAll('[data-add]').forEach(button => button.onclick = async () => {
     button.disabled = true;
-    await add({id: button.dataset.id, name: button.dataset.name, price: button.dataset.price, image: button.dataset.image || ''});
+    await add({id: button.dataset.id, variantId: button.dataset.variantId || '', name: button.dataset.name, price: button.dataset.price, image: button.dataset.image || ''});
     button.disabled = false;
     open();
   });
+  document.querySelectorAll('[data-variant-option]').forEach(option => option.addEventListener('click', () => {
+    const scope = option.closest('.product, .product-detail-content');
+    if (!scope) return;
+    scope.querySelectorAll('[data-variant-option]').forEach(button => {
+      const selected = button === option;
+      button.classList.toggle('is-selected', selected);
+      button.setAttribute('aria-pressed', String(selected));
+    });
+    const addButton = scope.querySelector('[data-add]');
+    if (addButton) {
+      const baseName = addButton.dataset.name.replace(/ — .+$/, '');
+      addButton.dataset.variantId = option.dataset.variantId;
+      addButton.dataset.price = option.dataset.variantPrice;
+      addButton.dataset.name = `${baseName} — ${option.dataset.variantName}`;
+    }
+    scope.querySelectorAll('[data-variant-price-display]').forEach(price => { price.textContent = money(option.dataset.variantPrice); });
+  }));
   document.querySelectorAll('[data-filter]').forEach(button => button.onclick = () => { document.querySelectorAll('[data-filter]').forEach(x => x.classList.remove('active')); button.classList.add('active'); document.querySelectorAll('[data-category]').forEach(card => card.hidden = button.dataset.filter !== 'all' && card.dataset.category !== button.dataset.filter); });
 
   cartReady = initialiseAccountCart();

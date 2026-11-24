@@ -9,7 +9,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from .models import Cart, CartItem, Category, Coupon, CustomerAddress, Order, OrderEmail, OrderItem, Payment, Product, ProductImage, ProductReview
+from .models import Cart, CartItem, Category, Coupon, CustomerAddress, Order, OrderEmail, OrderItem, Payment, Product, ProductImage, ProductReview, ProductVariant
 from .services import carts
 
 
@@ -189,7 +189,7 @@ class CheckoutTests(TestCase):
     def test_checkout_cart_cleanup_preserves_later_added_quantity(self):
         cart = Cart.objects.create(user=self.user)
         CartItem.objects.create(cart=cart, product=self.product, quantity=3)
-        carts.remove_checked_out_quantities(self.user, {self.product.id: 2})
+        carts.remove_checked_out_quantities(self.user, {(self.product.id, None): 2})
         self.assertEqual(cart.items.get(product=self.product).quantity, 1)
 
     def test_review_uses_database_price_and_total(self):
@@ -197,6 +197,39 @@ class CheckoutTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["items"][0]["price"], "100.00")
         self.assertEqual(response.json()["total"], "200.00")
+
+    def test_variant_price_is_revalidated_and_saved_on_order(self):
+        variant = ProductVariant.objects.create(product=self.product, name="500 g", price=Decimal("240.00"), shipping_weight_kg=Decimal("0.500"), is_default=True)
+        cart = [{"id": f"{self.product.id}:v{variant.id}", "name": "Almonds — 500 g", "price": 1, "quantity": 2}]
+        review = self.review(cart)
+        self.assertEqual(review.status_code, 200)
+        self.assertEqual(review.json()["total"], "480.00")
+        with patch("store.views.delivery_estimate", return_value={"message": "To be confirmed", "courier": ""}):
+            result = self.client.post(reverse("checkout"), self.order_data(review.json()["quote"], cart=cart))
+        self.assertEqual(result.status_code, 302)
+        item = Order.objects.get().items.get()
+        self.assertEqual(item.variant, variant)
+        self.assertEqual(item.variant_name, "500 g")
+        self.assertEqual(item.unit_price, Decimal("240.00"))
+
+    def test_variant_must_belong_to_the_selected_product(self):
+        other = Product.objects.create(category=self.product.category, name="Cashews", slug="cashews", short_description="Cashews", description="Cashews", price=Decimal("200.00"))
+        variant = ProductVariant.objects.create(product=other, name="250 g", price=Decimal("220.00"))
+        cart = [{"id": f"{self.product.id}:v{variant.id}", "quantity": 1}]
+
+        response = self.review(cart)
+
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("no longer available", response.json()["detail"])
+
+    def test_inactive_variant_cannot_be_reviewed_or_purchased(self):
+        variant = ProductVariant.objects.create(product=self.product, name="1 kg", price=Decimal("400.00"), is_active=False)
+        cart = [{"id": f"{self.product.id}:v{variant.id}", "quantity": 1}]
+
+        response = self.review(cart)
+
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("no longer available", response.json()["detail"])
 
     def test_first_paid_order_coupon_is_server_validated_and_saved_on_order(self):
         Coupon.objects.create(

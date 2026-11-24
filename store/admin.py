@@ -5,13 +5,19 @@ from django.db import IntegrityError, transaction
 from django.utils.html import format_html_join
 import requests
 from .services import payments
-from .models import Cart, CartItem, Category, Coupon, CouponRedemption, CustomerAddress, Order, OrderEmail, OrderItem, Payment, Product, ProductImage, ProductReview
+from .models import Cart, CartItem, Category, Coupon, CouponRedemption, CustomerAddress, Order, OrderEmail, OrderItem, Payment, Product, ProductImage, ProductReview, ProductVariant
 from .services.notifications import deliver_order_email, queue_order_status_email
 
 class ProductImageInline(admin.TabularInline):
     model = ProductImage
     extra = 1
     fields = ("image", "static_image_path", "alt_text", "position")
+
+
+class ProductVariantInline(admin.TabularInline):
+    model = ProductVariant
+    extra = 1
+    fields = ("name", "price", "shipping_weight_kg", "sku", "position", "is_default", "is_active")
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
@@ -26,7 +32,7 @@ class ProductAdmin(admin.ModelAdmin):
     )
     prepopulated_fields = {"slug": ("name",)}
     search_fields = ("name", "description")
-    inlines = [ProductImageInline]
+    inlines = [ProductVariantInline, ProductImageInline]
 
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
@@ -36,7 +42,7 @@ class CategoryAdmin(admin.ModelAdmin):
 class CartItemInline(admin.TabularInline):
     model = CartItem
     extra = 0
-    readonly_fields = ("product", "quantity", "created_at", "updated_at")
+    readonly_fields = ("product", "variant", "quantity", "created_at", "updated_at")
     can_delete = False
 
 
@@ -86,7 +92,7 @@ class ProductReviewAdmin(admin.ModelAdmin):
 class OrderItemInline(admin.TabularInline):
     model = OrderItem
     extra = 0
-    readonly_fields = ("product", "product_name", "unit_price", "quantity")
+    readonly_fields = ("product", "variant", "product_name", "variant_name", "unit_price", "quantity")
     can_delete = False
 
 

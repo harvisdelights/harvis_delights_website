@@ -43,8 +43,14 @@ def queue_order_email(order, recipient, subject, body, *, deduplication_key=None
     transaction.on_commit(lambda: deliver_order_email(notification.pk), robust=True)
 
 
+def _item_line(item):
+    """Render the immutable product/pack snapshot stored on an order item."""
+    label = f"{item.product_name} ({item.variant_name})" if item.variant_name else item.product_name
+    return f"- {label} x {item.quantity}: INR {item.unit_price} each"
+
+
 def queue_new_order_emails(order):
-    lines = "\n".join(f"- {item.product_name} x {item.quantity}: INR {item.unit_price} each" for item in order.items.all())
+    lines = "\n".join(_item_line(item) for item in order.items.all())
     discount = f"\nCoupon {order.coupon_code}: -INR {order.discount_total}" if order.discount_total else ""
     body = f"Order reference: {order.number}\nOrder status: {order.get_status_display()}\nPayment status: Not paid at time of order creation\n\n{lines}\n\nItems subtotal: INR {order.subtotal}{discount}\nAmount to pay: INR {order.total}\nDelivery is free. Check the order page for the latest payment status.\n\nHarvi's Delights"
     queue_order_email(order, order.user.email, f"Order received - {order.number}", f"Thank you. Your order has been received; payment is separate.\n\n{body}")
@@ -65,7 +71,7 @@ def queue_payment_captured_emails(payment_id):
         return
 
     order = payment.order
-    lines = "\n".join(f"- {item.product_name} x {item.quantity}: INR {item.unit_price} each" for item in order.items.all())
+    lines = "\n".join(_item_line(item) for item in order.items.all())
     if payment.environment == Payment.Environment.LIVE:
         customer_intro = "Your payment has been captured successfully."
         seller_intro = "A live payment has been captured."

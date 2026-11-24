@@ -12,6 +12,10 @@ Database-driven storefront for Harvi's Delights. It includes a public product ca
 
 Open `/admin/` to add categories, products, primary photos, extra gallery photos, descriptions, prices, weights, Flipkart/Meesho marketplace links, and featured status. The API is available at `/api/products/` and `/api/categories/`.
 
+### Product pack sizes / variants
+
+Products can keep their existing single price, or receive separately purchasable options such as `250 g`, `500 g`, and `1 kg`. In **Admin → Products**, add rows in the **Product variants** section. Each active variant has its own displayed price, optional SKU, optional delivery-weight override, ordering position, and optional default selection. Do not create a variant until it has a real price. A customer’s selected option is stored in the cart, revalidated server-side at checkout, used in the Razorpay amount, and recorded as an immutable option label and unit price on the order/email. Disabling an option prevents it from being purchased while preserving historical orders. Products with no active variants continue to use the product’s existing price and weight.
+
 ## Customer accounts
 
 Customers can register and sign in with their email address at `/signup/` and `/login/`. Accounts use Django's built-in authentication tables in the configured database (Render PostgreSQL in production). Customers can view their account and change their password. Password recovery becomes available after ZeptoMail and `PUBLIC_SITE_URL` are configured.

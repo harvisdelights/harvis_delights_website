@@ -8,13 +8,14 @@ import json
 import logging
 import re
 import uuid
+from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
 
 from django.core import signing
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
-from django.db.models import Avg
+from django.db.models import Avg, Prefetch
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse, reverse_lazy
@@ -22,7 +23,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 import requests
 from rest_framework import viewsets
-from .models import Category, CustomerAddress, Order, OrderItem, Payment, Product, ProductReview
+from .models import Category, CustomerAddress, Order, OrderItem, Payment, Product, ProductReview, ProductVariant
 from .serializers import CategorySerializer, ProductSerializer
 from .forms import CheckoutAddressForm, CustomerLoginForm, CustomerSignupForm, CustomerPasswordResetForm, ProductReviewForm
 from .services.shipping import SELLER_AREA, SELLER_NAME, SELLER_PINCODE, delivery_estimate
@@ -59,10 +60,32 @@ def product_media(request, path):
     response["Cache-Control"] = "public, max-age=86400"
     return response
 
+def _prepare_products(products):
+    """Attach only active variants and a deterministic default for templates."""
+    products = list(products)
+    for product in products:
+        product.active_variants = [variant for variant in product.variants.all() if variant.is_active]
+        product.default_variant = next((variant for variant in product.active_variants if variant.is_default), None)
+        if not product.default_variant and product.active_variants:
+            product.default_variant = product.active_variants[0]
+        product.display_price = product.default_variant.price if product.default_variant else product.price
+    return products
+
+
 def home(request):
-    return render(request, "store/home.html", {"featured": Product.objects.filter(is_active=True, is_featured=True)[:6]})
+    featured = _prepare_products(
+        Product.objects.filter(is_active=True, is_featured=True).prefetch_related(
+            Prefetch("variants", queryset=ProductVariant.objects.filter(is_active=True))
+        )[:6]
+    )
+    return render(request, "store/home.html", {"featured": featured})
 def products(request):
-    return render(request, "store/products.html", {"products": Product.objects.filter(is_active=True), "categories": Category.objects.all()})
+    products = _prepare_products(
+        Product.objects.filter(is_active=True).prefetch_related(
+            Prefetch("variants", queryset=ProductVariant.objects.filter(is_active=True))
+        )
+    )
+    return render(request, "store/products.html", {"products": products, "categories": Category.objects.all()})
 def _product_detail_context(product):
     reviews = product.reviews.filter(is_visible=True).select_related("user")
     summary = reviews.aggregate(average=Avg("rating"))
@@ -76,10 +99,13 @@ def _product_detail_context(product):
 
 def product_detail(request, slug):
     product = get_object_or_404(
-        Product.objects.select_related("category").prefetch_related("gallery"),
+        Product.objects.select_related("category").prefetch_related(
+            "gallery", Prefetch("variants", queryset=ProductVariant.objects.filter(is_active=True))
+        ),
         slug=slug,
         is_active=True,
     )
+    _prepare_products([product])
     return render(request, "store/detail.html", _product_detail_context(product))
 
 
@@ -187,13 +213,20 @@ def _cart_quantities(raw_cart, *, allow_empty=False):
         try:
             if not isinstance(item, dict):
                 raise ValueError
-            product_id = int(str(item["id"]))
+            raw_id = str(item["id"])
+            match = re.fullmatch(r"(\d+)(?::v(\d+))?", raw_id)
+            if not match:
+                raise ValueError
+            product_id = int(match.group(1))
+            variant_id = int(match.group(2)) if match.group(2) else None
             quantity = int(str(item["quantity"]))
         except (KeyError, TypeError, ValueError, OverflowError):
             raise ValueError("Your cart contains an invalid item. Please review it.")
-        if not 1 <= product_id <= 9223372036854775807 or not 1 <= quantity <= 20 or product_id in quantities:
+        key = (product_id, variant_id)
+        if (not 1 <= product_id <= 9223372036854775807 or (variant_id is not None and not 1 <= variant_id <= 9223372036854775807)
+                or not 1 <= quantity <= 20 or key in quantities):
             raise ValueError("Your cart contains an invalid quantity or duplicate item. Please review it.")
-        quantities[product_id] = quantity
+        quantities[key] = quantity
     return quantities
 
 
@@ -213,17 +246,19 @@ def cart_merge(request):
 def cart_mutate(request):
     try:
         product_id = int(request.POST.get("product_id", ""))
+        variant_id = int(request.POST.get("variant_id", "")) if request.POST.get("variant_id") else None
         quantity = int(request.POST.get("quantity", "0"))
         expected_version = int(request.POST.get("version", ""))
     except (TypeError, ValueError):
         return JsonResponse({"detail": "Invalid cart update."}, status=400)
-    if product_id < 1 or expected_version < 0:
+    if product_id < 1 or (variant_id is not None and variant_id < 1) or expected_version < 0:
         return JsonResponse({"detail": "Invalid cart update."}, status=400)
     try:
         payload, current = carts.mutate(
             request.user,
             action=request.POST.get("action", ""),
             product_id=product_id,
+            variant_id=variant_id,
             quantity=quantity,
             expected_version=expected_version,
         )
@@ -234,17 +269,49 @@ def cart_mutate(request):
     return JsonResponse(payload)
 
 
+@dataclass(frozen=True)
+class CartLine:
+    key: tuple
+    product: Product
+    variant: ProductVariant | None
+
+    @property
+    def price(self):
+        return self.variant.price if self.variant else self.product.price
+
+    @property
+    def name(self):
+        return self.product.name + (f" — {self.variant.name}" if self.variant else "")
+
+    @property
+    def shipping_weight_kg(self):
+        return self.variant.shipping_weight_kg if self.variant and self.variant.shipping_weight_kg else self.product.shipping_weight_kg
+
+
 def _cart_products(quantities, lock=False):
-    products = Product.objects.filter(id__in=quantities, is_active=True).order_by("id")
+    product_ids = {product_id for product_id, _ in quantities}
+    variant_ids = {variant_id for _, variant_id in quantities if variant_id}
+    product_query = Product.objects.filter(id__in=product_ids, is_active=True).order_by("id")
+    variant_query = ProductVariant.objects.filter(id__in=variant_ids, is_active=True)
     if lock:
-        products = products.select_for_update()
-    products = list(products)
-    missing = sorted(set(quantities) - {product.id for product in products})
-    return products, missing
+        product_query = product_query.select_for_update()
+        variant_query = variant_query.select_for_update()
+    products = {product.id: product for product in product_query}
+    variants = {variant.id: variant for variant in variant_query}
+    lines, missing = [], []
+    for key in quantities:
+        product_id, variant_id = key
+        product = products.get(product_id)
+        variant = variants.get(variant_id) if variant_id else None
+        if not product or (variant_id and (not variant or variant.product_id != product_id)):
+            missing.append(carts.line_key(product_id, variant_id))
+        else:
+            lines.append(CartLine(key, product, variant))
+    return lines, missing
 
 
 def _quote_lines(products, quantities):
-    return [{"id": product.id, "quantity": quantities[product.id], "price": str(product.price)} for product in products]
+    return [{"id": carts.line_key(*line.key), "product_id": line.product.id, "variant_id": line.variant.id if line.variant else None, "quantity": quantities[line.key], "price": str(line.price)} for line in products]
 
 
 def _coupon_snapshot(coupon, discount):
@@ -256,7 +323,7 @@ def _coupon_snapshot(coupon, discount):
 
 
 def _checkout_pricing(products, quantities, user, coupon_code):
-    subtotal = sum((product.price * quantities[product.id] for product in products), Decimal("0"))
+    subtotal = sum((line.price * quantities[line.key] for line in products), Decimal("0"))
     coupon, discount = coupons.validate_coupon_for_checkout(code=coupon_code, user=user, subtotal=subtotal)
     return subtotal, coupon, discount, subtotal - discount
 
@@ -277,7 +344,7 @@ def cart_review(request):
     except coupons.CouponError as exc:
         return JsonResponse({"detail": str(exc), "coupon_error": True}, status=400)
     lines = _quote_lines(products, quantities)
-    items = [{"id": product.id, "name": product.name, "quantity": quantities[product.id], "price": str(product.price), "line_total": str(product.price * quantities[product.id])} for product in products]
+    items = [{"id": carts.line_key(*line.key), "name": line.name, "quantity": quantities[line.key], "price": str(line.price), "line_total": str(line.price * quantities[line.key])} for line in products]
     if subtotal > Decimal("99999999.99"):
         return JsonResponse({"detail": "Your order total exceeds the supported limit. Please reduce your cart."}, status=400)
     coupon_data = _coupon_snapshot(coupon, discount)
@@ -296,8 +363,8 @@ def shipping_estimate(request):
     pincode = request.POST.get("pincode", "").strip()
     if missing or len(pincode) != 6 or not pincode.isdigit():
         return JsonResponse({"detail": "Add products and enter a valid pincode."}, status=400)
-    subtotal = sum((product.price * quantities[product.id] for product in products), Decimal("0"))
-    weight = sum((product.shipping_weight_kg * quantities[product.id] for product in products), Decimal("0"))
+    subtotal = sum((line.price * quantities[line.key] for line in products), Decimal("0"))
+    weight = sum((line.shipping_weight_kg * quantities[line.key] for line in products), Decimal("0"))
     estimate = delivery_estimate(pincode, weight, subtotal)
     estimate["origin"] = f"{SELLER_NAME}, {SELLER_AREA} – {SELLER_PINCODE}"
     return JsonResponse(estimate)
@@ -341,7 +408,7 @@ def checkout(request):
                             or quote.get("coupon") != _coupon_snapshot(coupon, discount)):
                         form.add_error(None, "Your cart or prices changed. Please review the current items and total before ordering.")
                     else:
-                        weight = sum((p.shipping_weight_kg * quantities[p.id] for p in products), Decimal("0"))
+                        weight = sum((line.shipping_weight_kg * quantities[line.key] for line in products), Decimal("0"))
                         estimate = delivery_estimate(form.cleaned_data["pincode"], weight, subtotal)
                         try:
                             with transaction.atomic():
@@ -352,7 +419,18 @@ def checkout(request):
                                     raise ValueError("Your cart or prices changed. Please review the current items and total before ordering.")
                                 address = CustomerAddress.objects.create(user=request.user, **{key: form.cleaned_data[key] for key in ("full_name", "phone", "line1", "line2", "city", "state", "pincode")})
                                 order = Order.objects.create(checkout_id=checkout_id, user=request.user, address=address, environment=settings.RAZORPAY_MODE if settings.RAZORPAY_MODE in ("test", "live") else Order.Environment.LEGACY, status=Order.Status.PENDING, subtotal=subtotal, coupon=coupon, coupon_code=coupon.code if coupon else "", discount_total=discount, total=total, delivery_estimate=estimate["message"], shiprocket_courier=estimate["courier"])
-                                OrderItem.objects.bulk_create([OrderItem(order=order, product=p, product_name=p.name, unit_price=p.price, quantity=quantities[p.id]) for p in products])
+                                OrderItem.objects.bulk_create([
+                                    OrderItem(
+                                        order=order,
+                                        product=line.product,
+                                        variant=line.variant,
+                                        product_name=line.product.name,
+                                        variant_name=line.variant.name if line.variant else "",
+                                        unit_price=line.price,
+                                        quantity=quantities[line.key],
+                                    )
+                                    for line in products
+                                ])
                                 transaction.on_commit(lambda user=request.user, ordered=quantities.copy(): carts.remove_checked_out_quantities(user, ordered), robust=True)
                                 queue_new_order_emails(order)
                         except ValueError as exc:
@@ -488,7 +566,7 @@ def razorpay_webhook(request):
     return HttpResponse(status=200)
 
 class ProductViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = Product.objects.filter(is_active=True).select_related("category").prefetch_related("gallery")
+    queryset = Product.objects.filter(is_active=True).select_related("category").prefetch_related("gallery", Prefetch("variants", queryset=ProductVariant.objects.filter(is_active=True)))
     serializer_class = ProductSerializer
     lookup_field = "slug"
 class CategoryViewSet(viewsets.ReadOnlyModelViewSet):

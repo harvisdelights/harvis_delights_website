@@ -11,7 +11,7 @@
   {% if messages %}<div class="review-messages">{% for message in messages %}<p class="{{ message.tags }}">{{ message }}</p>{% endfor %}</div>{% endif %}
   <div class="confirmation-detail"><span>Estimated delivery</span><b>{{ order.delivery_estimate|default:"To be confirmed" }}</b>{% if order.shiprocket_courier %}<small>Courier option: {{ order.shiprocket_courier }}</small>{% endif %}</div>
   <h2>Items</h2>{% for item in order.items.all %}
-  <div class="confirmation-item"><span>{{ item.product_name }} &times; {{ item.quantity }}</span><b>&#8377;{{ item.unit_price }} each</b></div>
+  <div class="confirmation-item"><span>{{ item.product_name }}{% if item.variant_name %} &middot; {{ item.variant_name }}{% endif %} &times; {{ item.quantity }}</span><b>&#8377;{{ item.unit_price }} each</b></div>
   {% if item.can_review %}
     <div class="order-review-action">
       {% if item.show_review_form %}

@@ -1,30 +1,37 @@
 from django.db import IntegrityError, transaction
 
-from store.models import Cart, CartItem, Product
+from store.models import Cart, CartItem, Product, ProductVariant
 
 
 MAX_CART_QUANTITY = 20
+
+
+def line_key(product_id, variant_id=None):
+    return f"{product_id}:v{variant_id}" if variant_id else str(product_id)
 
 
 def _locked_cart(user):
     try:
         Cart.objects.get_or_create(user=user)
     except IntegrityError:
-        # A simultaneous first request created this user's one-to-one cart.
         pass
     return Cart.objects.select_for_update().get(user=user)
 
 
 def _payload(cart):
     CartItem.objects.filter(cart=cart, product__is_active=False).delete()
-    items = CartItem.objects.filter(cart=cart, product__is_active=True).select_related("product").order_by("id")
+    CartItem.objects.filter(cart=cart, variant__isnull=False, variant__is_active=False).delete()
+    items = CartItem.objects.filter(cart=cart, product__is_active=True).select_related("product", "variant").order_by("id")
     return {
         "version": cart.version,
         "items": [
             {
-                "id": str(item.product_id),
-                "name": item.product.name,
-                "price": str(item.product.price),
+                "id": line_key(item.product_id, item.variant_id),
+                "product_id": str(item.product_id),
+                "variant_id": str(item.variant_id) if item.variant_id else "",
+                "name": item.product.name + (f" — {item.variant.name}" if item.variant_id else ""),
+                "variant_name": item.variant.name if item.variant_id else "",
+                "price": str(item.variant.price if item.variant_id else item.product.price),
                 "image": item.product.display_image_url,
                 "quantity": item.quantity,
             }
@@ -33,37 +40,30 @@ def _payload(cart):
     }
 
 
-def snapshot(user):
+def merge_guest_cart(user, lines):
+    """Merge a guest device cart without doubling an identical product option."""
     with transaction.atomic():
         cart = _locked_cart(user)
-        return _payload(cart)
-
-
-def merge_guest_cart(user, quantities):
-    """Merge a guest device cart without accidentally doubling equal items."""
-    with transaction.atomic():
-        cart = _locked_cart(user)
-        products = {
-            product.id: product
-            for product in Product.objects.select_for_update().filter(id__in=quantities, is_active=True)
-        }
-        existing = {
-            item.product_id: item
-            for item in CartItem.objects.select_for_update().filter(cart=cart)
-        }
+        product_ids = {product_id for product_id, _ in lines}
+        variant_ids = {variant_id for _, variant_id in lines if variant_id}
+        products = {p.id: p for p in Product.objects.select_for_update().filter(id__in=product_ids, is_active=True)}
+        variants = {v.id: v for v in ProductVariant.objects.select_for_update().filter(id__in=variant_ids, is_active=True)}
+        existing = {(item.product_id, item.variant_id): item for item in CartItem.objects.select_for_update().filter(cart=cart)}
         changed = False
-        for product_id, quantity in quantities.items():
-            if product_id not in products:
+        for (product_id, variant_id), quantity in lines.items():
+            product = products.get(product_id)
+            variant = variants.get(variant_id) if variant_id else None
+            if not product or (variant_id and (not variant or variant.product_id != product_id)):
                 continue
-            item = existing.get(product_id)
+            item = existing.get((product_id, variant_id))
             if item:
-                merged_quantity = max(item.quantity, quantity)
-                if item.quantity != merged_quantity:
-                    item.quantity = merged_quantity
+                merged = max(item.quantity, quantity)
+                if item.quantity != merged:
+                    item.quantity = merged
                     item.save(update_fields=["quantity", "updated_at"])
                     changed = True
             else:
-                CartItem.objects.create(cart=cart, product_id=product_id, quantity=quantity)
+                CartItem.objects.create(cart=cart, product=product, variant=variant, quantity=quantity)
                 changed = True
         if changed:
             cart.version += 1
@@ -71,22 +71,22 @@ def merge_guest_cart(user, quantities):
         return _payload(cart)
 
 
-def mutate(user, *, action, product_id, quantity, expected_version):
-    """Apply one cart operation with optimistic concurrency protection."""
+def mutate(user, *, action, product_id, variant_id, quantity, expected_version):
     with transaction.atomic():
         cart = _locked_cart(user)
         if expected_version != cart.version:
             return None, _payload(cart)
         product = Product.objects.filter(pk=product_id, is_active=True).first()
-        if not product:
-            raise ValueError("This product is no longer available.")
-        item = CartItem.objects.select_for_update().filter(cart=cart, product=product).first()
+        variant = ProductVariant.objects.filter(pk=variant_id, product_id=product_id, is_active=True).first() if variant_id else None
+        if not product or (variant_id and not variant):
+            raise ValueError("This product option is no longer available.")
+        item = CartItem.objects.select_for_update().filter(cart=cart, product=product, variant=variant).first()
         if action == "add":
             if item:
                 item.quantity = min(MAX_CART_QUANTITY, item.quantity + 1)
                 item.save(update_fields=["quantity", "updated_at"])
             else:
-                CartItem.objects.create(cart=cart, product=product, quantity=1)
+                CartItem.objects.create(cart=cart, product=product, variant=variant, quantity=1)
         elif action == "set":
             if not 0 <= quantity <= MAX_CART_QUANTITY:
                 raise ValueError("Invalid cart quantity.")
@@ -97,7 +97,7 @@ def mutate(user, *, action, product_id, quantity, expected_version):
                 item.quantity = quantity
                 item.save(update_fields=["quantity", "updated_at"])
             else:
-                CartItem.objects.create(cart=cart, product=product, quantity=quantity)
+                CartItem.objects.create(cart=cart, product=product, variant=variant, quantity=quantity)
         else:
             raise ValueError("Invalid cart action.")
         cart.version += 1
@@ -105,22 +105,18 @@ def mutate(user, *, action, product_id, quantity, expected_version):
         return _payload(cart), None
 
 
-def remove_checked_out_quantities(user, quantities):
-    """Remove only checked-out quantities, preserving later additions on another device."""
+def remove_checked_out_quantities(user, lines):
     with transaction.atomic():
         cart = Cart.objects.select_for_update().filter(user=user).first()
         if not cart:
             return
-        items = {
-            item.product_id: item
-            for item in CartItem.objects.select_for_update().filter(cart=cart, product_id__in=quantities)
-        }
+        items = {(item.product_id, item.variant_id): item for item in CartItem.objects.select_for_update().filter(cart=cart)}
         changed = False
-        for product_id, ordered_quantity in quantities.items():
-            item = items.get(product_id)
+        for key, ordered in lines.items():
+            item = items.get(key)
             if not item:
                 continue
-            remaining = item.quantity - ordered_quantity
+            remaining = item.quantity - ordered
             if remaining > 0:
                 item.quantity = remaining
                 item.save(update_fields=["quantity", "updated_at"])

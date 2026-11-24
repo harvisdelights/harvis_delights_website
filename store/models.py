@@ -5,6 +5,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.db.models import Q
 from django.templatetags.static import static
 from django.urls import reverse
 from django.utils import timezone
@@ -85,6 +86,47 @@ class ProductImage(models.Model):
         return self.image.url if self.image else ""
 
 
+class ProductVariant(models.Model):
+    """A separately priced, purchasable option such as 250 g or 1 kg."""
+    product = models.ForeignKey(Product, related_name="variants", on_delete=models.CASCADE)
+    name = models.CharField(max_length=60, help_text="Customer-facing option, for example 250 g or 1 kg.")
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    shipping_weight_kg = models.DecimalField(
+        max_digits=5,
+        decimal_places=3,
+        null=True,
+        blank=True,
+        help_text="Optional override for delivery estimates. Leave empty to use the product weight.",
+    )
+    sku = models.CharField(max_length=64, unique=True, null=True, blank=True)
+    position = models.PositiveSmallIntegerField(default=0)
+    is_default = models.BooleanField(default=False, help_text="Preselected on the product page when more than one option is available.")
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["position", "id"]
+        constraints = [
+            models.UniqueConstraint(fields=("product", "name"), name="unique_variant_name_per_product"),
+        ]
+
+    def clean(self):
+        super().clean()
+        if self.price is not None and self.price <= 0:
+            raise ValidationError({"price": "Variant price must be greater than zero."})
+        if self.shipping_weight_kg is not None and self.shipping_weight_kg <= 0:
+            raise ValidationError({"shipping_weight_kg": "Shipping weight must be greater than zero."})
+
+    def save(self, *args, **kwargs):
+        self.name = (self.name or "").strip()
+        self.sku = (self.sku or "").strip() or None
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.product.name} — {self.name}"
+
+
 class CustomerAddress(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, related_name="addresses", on_delete=models.CASCADE)
     full_name = models.CharField(max_length=120)
@@ -118,13 +160,15 @@ class Cart(models.Model):
 class CartItem(models.Model):
     cart = models.ForeignKey(Cart, related_name="items", on_delete=models.CASCADE)
     product = models.ForeignKey(Product, related_name="cart_items", on_delete=models.CASCADE)
+    variant = models.ForeignKey(ProductVariant, related_name="cart_items", null=True, blank=True, on_delete=models.CASCADE)
     quantity = models.PositiveSmallIntegerField(validators=[MinValueValidator(1), MaxValueValidator(20)])
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         constraints = [
-            models.UniqueConstraint(fields=("cart", "product"), name="unique_product_per_cart"),
+            models.UniqueConstraint(fields=("cart", "variant"), condition=Q(variant__isnull=False), name="unique_variant_per_cart"),
+            models.UniqueConstraint(fields=("cart", "product"), condition=Q(variant__isnull=True), name="unique_base_product_per_cart"),
         ]
 
 
@@ -236,7 +280,9 @@ class CouponRedemption(models.Model):
 class OrderItem(models.Model):
     order = models.ForeignKey(Order, related_name="items", on_delete=models.CASCADE)
     product = models.ForeignKey(Product, related_name="order_items", on_delete=models.PROTECT)
+    variant = models.ForeignKey(ProductVariant, related_name="order_items", null=True, blank=True, on_delete=models.PROTECT)
     product_name = models.CharField(max_length=160)
+    variant_name = models.CharField(max_length=60, blank=True, editable=False)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     quantity = models.PositiveIntegerField()
 
