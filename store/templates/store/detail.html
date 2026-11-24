@@ -14,7 +14,7 @@
       {% endif %}
     </div>
   </section>
-  <div><a class="back" href="{% url 'products' %}">&larr; Back to shop</a><p class="eyebrow">{{ product.category.name }} {% if product.weight %}&middot; {{ product.weight }}{% endif %}</p><h1>{{ product.name }}</h1><strong class="detail-price">&#8377;{{ product.price }}</strong><p>{{ product.description }}</p>
+  <div class="product-detail-content"><a class="back" href="{% url 'products' %}"><span aria-hidden="true">&larr;</span> Back to shop</a><p class="eyebrow">{{ product.category.name }} {% if product.weight %}&middot; {{ product.weight }}{% endif %}</p><h1>{{ product.name }}</h1><strong class="detail-price">&#8377;{{ product.price }}</strong><p>{{ product.description }}</p>
   <div class="product-actions"><button class="button" data-add data-id="{{ product.id }}" data-name="{{ product.name }}" data-price="{{ product.price }}" {% if product.display_image_url %}data-image="{{ product.display_image_url }}"{% endif %}>Add to cart</button>{% if product.flipkart_url %}<a class="marketplace flipkart" href="{{ product.flipkart_url }}" target="_blank" rel="noopener">Buy on Flipkart</a>{% endif %}{% if product.meesho_url %}<a class="marketplace meesho" href="{{ product.meesho_url }}" target="_blank" rel="noopener">Buy on Meesho</a>{% endif %}</div>
   {% if product.display_image_url or product.gallery.all %}
     <div class="gallery product-gallery-thumbnails" aria-label="Choose a product image">
