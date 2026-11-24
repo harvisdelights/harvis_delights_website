@@ -13,6 +13,8 @@
   const couponMessage = document.querySelector('#coupon-message');
   const message = document.querySelector('#cart-review-message');
   const estimate = document.querySelector('#estimate-result');
+  const checkoutContent = document.querySelector('#checkout-content');
+  const emptyCheckout = document.querySelector('#checkout-empty');
   const csrf = form.querySelector('[name=csrfmiddlewaretoken]').value;
   const money = value => `₹${Number(value).toFixed(2)}`;
   let reviewVersion = 0;
@@ -36,9 +38,13 @@
     discountRow.hidden = true;
     couponMessage.textContent = 'Have a coupon? Apply it before continuing to payment.';
     if (!Array.isArray(cart) || !cart.length) {
+      checkoutContent.hidden = true;
+      emptyCheckout.hidden = false;
       message.textContent = 'Your cart is empty or invalid. Please return to the shop.';
       return;
     }
+    emptyCheckout.hidden = true;
+    checkoutContent.hidden = false;
     message.textContent = 'Checking current products and prices...';
     const data = new FormData();
     data.append('cart_payload', raw);

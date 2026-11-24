@@ -32,8 +32,15 @@
   };
   const render = () => {
     const cart = read(), target = document.querySelector('[data-cart-items]');
+    const checkout = document.querySelector('[data-cart-checkout]');
+    const hasItems = cart.some(item => Number(item.quantity) > 0);
     document.querySelectorAll('[data-cart-count]').forEach(x => x.textContent = cart.reduce((n, p) => n + p.quantity, 0));
     document.querySelector('[data-cart-total]').textContent = money(cart.reduce((n, p) => n + p.price * p.quantity, 0));
+    if (checkout) {
+      checkout.classList.toggle('is-disabled', !hasItems);
+      checkout.setAttribute('aria-disabled', String(!hasItems));
+      checkout.tabIndex = hasItems ? 0 : -1;
+    }
     target.innerHTML = cart.length ? cart.map(p => `<div class="cart-item">${p.image ? `<img src="${p.image}" alt="">` : `<span class="cart-thumb">${p.name[0]}</span>`}<div><b>${p.name}</b><span>${money(p.price)} each</span><span class="cart-quantity"><button type="button" data-decrease="${p.id}" aria-label="Decrease ${p.name} quantity">-</button><em>${p.quantity}</em><button type="button" data-increase="${p.id}" aria-label="Increase ${p.name} quantity">+</button></span></div><button data-remove="${p.id}">Remove</button></div>`).join('') : '<p class="cart-note">Your cart is empty. Add something delightful.</p>';
     target.querySelectorAll('[data-remove]').forEach(button => button.onclick = () => updateQuantity(button.dataset.remove, 0));
     target.querySelectorAll('[data-increase]').forEach(button => button.onclick = () => {
@@ -133,6 +140,12 @@
 
   document.querySelectorAll('[data-cart-open]').forEach(x => x.onclick = open);
   document.querySelectorAll('[data-cart-close]').forEach(x => x.onclick = close);
+  document.querySelectorAll('[data-cart-checkout]').forEach(link => link.addEventListener('click', event => {
+    if (!read().some(item => Number(item.quantity) > 0)) {
+      event.preventDefault();
+      message('Add an item before proceeding to checkout.');
+    }
+  }));
   document.querySelectorAll('[data-add]').forEach(button => button.onclick = async () => {
     button.disabled = true;
     await add({id: button.dataset.id, name: button.dataset.name, price: button.dataset.price, image: button.dataset.image || ''});
