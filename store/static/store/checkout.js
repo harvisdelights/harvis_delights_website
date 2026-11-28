@@ -17,6 +17,17 @@
   const emptyCheckout = document.querySelector('#checkout-empty');
   const csrf = form.querySelector('[name=csrfmiddlewaretoken]').value;
   const money = value => `₹${Number(value).toFixed(2)}`;
+  const setCouponMessage = (text, state = 'hint') => {
+    couponMessage.textContent = text;
+    couponMessage.className = `coupon-message coupon-message--${state}`;
+    if (state === 'error') {
+      couponMessage.setAttribute('role', 'alert');
+      couponMessage.setAttribute('aria-live', 'assertive');
+    } else {
+      couponMessage.removeAttribute('role');
+      couponMessage.setAttribute('aria-live', 'polite');
+    }
+  };
   let reviewVersion = 0;
   // Reuse a pending request after a lost response or page reload for the same cart.
   const pending = sessionStorage.getItem('harvis-checkout-active');
@@ -36,7 +47,7 @@
     total.textContent = money(0);
     subtotal.textContent = money(0);
     discountRow.hidden = true;
-    couponMessage.textContent = 'Have a coupon? Apply it before continuing to payment.';
+    setCouponMessage('Have a coupon? Apply it before continuing to payment.');
     if (!Array.isArray(cart) || !cart.length) {
       checkoutContent.hidden = true;
       emptyCheckout.hidden = false;
@@ -58,7 +69,7 @@
           const item = cart.find(entry => String(entry.id) === String(id));
           return item ? item.name : `Product ${id}`;
         });
-        if (result.coupon_error) couponMessage.textContent = result.detail;
+        if (result.coupon_error) setCouponMessage(result.detail, 'error');
         else message.textContent = result.detail + (unavailable.length ? ` Unavailable: ${unavailable.join(', ')}. Open your cart to remove them.` : '');
         return;
       }
@@ -80,7 +91,7 @@
       if (Number(result.discount) > 0) {
         discountRow.hidden = false;
         discountValue.textContent = `-${money(result.discount)}`;
-        couponMessage.textContent = `${result.coupon} applied successfully.`;
+        setCouponMessage(`${result.coupon} applied successfully.`, 'success');
       }
       const changed = result.items.some(item => {
         const previous = cart.find(entry => String(entry.id) === String(item.id));
