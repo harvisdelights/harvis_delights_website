@@ -179,6 +179,61 @@ a:focus-visible {
   border-bottom: 1px solid rgba(189, 145, 75, .14);
 }
 
+/* A clear, comfortable route from the featured edit to the full collection. */
+.featured-collection .view-all-products {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 46px;
+  padding: 0 12px 0 17px;
+  border: 1px solid rgba(24, 61, 48, .28);
+  border-radius: 999px;
+  background: rgba(255, 253, 248, .82);
+  color: var(--forest);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .01em;
+  text-decoration: none;
+  box-shadow: 0 5px 14px rgba(28, 40, 33, .06);
+  transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.featured-collection .view-all-products__arrow {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--forest);
+  color: #fff;
+  font-size: 16px;
+  line-height: 1;
+  transition: background-color .18s ease, color .18s ease, transform .18s ease;
+}
+
+.featured-collection .view-all-products:hover {
+  border-color: var(--forest);
+  background: var(--forest);
+  color: #fff;
+  box-shadow: 0 9px 20px rgba(24, 61, 48, .18);
+  transform: translateY(-1px);
+}
+
+.featured-collection .view-all-products:hover .view-all-products__arrow {
+  background: var(--gold);
+  color: var(--ink);
+  transform: translateX(2px);
+}
+
+@media (max-width: 620px) {
+  .featured-collection .section-title {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 18px;
+  }
+}
+
 .light { background: #f4edde; }
 
 .order-summary,
