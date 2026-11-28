@@ -3,6 +3,50 @@
   align-self: start;
 }
 
+.product-description {
+  color: #657169;
+  font-size: 16px;
+  line-height: 1.72;
+}
+
+.product-description p { margin: 18px 0; }
+
+.product-description h3 {
+  margin: 28px 0 10px;
+  color: #183d30;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  line-height: 1.35;
+  text-transform: uppercase;
+}
+
+.product-description ul {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 22px;
+  padding: 0;
+  list-style: none;
+}
+
+.product-description li {
+  position: relative;
+  padding-left: 22px;
+}
+
+.product-description li::before {
+  position: absolute;
+  top: .72em;
+  left: 2px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #bd914b;
+  content: "";
+}
+
+.product-description strong { color: #183d30; }
+
 /* This stylesheet is loaded only by the product-detail page. */
 .detail {
   max-width: 1280px;
